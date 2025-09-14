@@ -1,0 +1,5 @@
+{
+  "name": "SyncUp: AI-Powered Team Scheduler",
+  "description": "A modern scheduling application inspired by Calendly, designed for seamless team coordination. It allows users to create various event types, manage availability, and share booking links. The app features a unified calendar view that handles overlapping events with distinct color-coding and provides insightful analytics on scheduling patterns.",
+  "requestFramePermissions": []
+}
