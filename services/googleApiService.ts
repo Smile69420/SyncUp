@@ -97,8 +97,8 @@ export const googleApiService = {
                     window.gapi.load('client:oauth2', {
                         callback: resolve,
                         onerror: (err: any) => reject(new Error(`Failed to load GAPI modules: ${JSON.stringify(err)}`)),
-                        timeout: 10000, // Increased timeout to 10 seconds for reliability
-                        ontimeout: () => reject(new Error('GAPI module loading timed out after 10 seconds.')),
+                        timeout: 30000, // Increased timeout to 30 seconds for reliability on slower networks.
+                        ontimeout: () => reject(new Error('GAPI module loading timed out after 30 seconds.')),
                     });
                 });
 
