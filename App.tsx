@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, Outlet, useNavigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
@@ -9,6 +8,7 @@ import { googleApiService } from './services/googleApiService';
 import GoogleAuthButton from './components/GoogleAuthButton';
 import LoginPage from './components/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import RecordsPage from './components/RecordsPage';
 
 
 const Layout: React.FC = () => {
@@ -42,6 +42,7 @@ const App: React.FC = () => {
                     <Route element={<Layout />}>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/analytics" element={<Analytics />} />
+                        <Route path="/records" element={<RecordsPage />} />
                     </Route>
                 </Route>
             </Routes>
@@ -61,6 +62,7 @@ const Header: React.FC = () => {
                     <nav className="flex items-center space-x-4">
                         <Link to="/" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Dashboard</Link>
                         <Link to="/analytics" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Analytics</Link>
+                        <Link to="/records" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Records</Link>
                         <div className="w-px h-6 bg-slate-200"></div>
                         <GoogleAuthButton />
                     </nav>

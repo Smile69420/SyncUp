@@ -74,3 +74,42 @@ export interface TimeSlot {
     startTime: Date;
     endTime: Date;
 }
+
+export interface BookingDetails {
+    id: string; // Same as booking ID
+    companyName?: string;
+    consultationDoneBy?: string;
+    designation?: string;
+    generalizedDesignation?: string;
+    level?: string;
+    capability?: string;
+    feedbackSent?: 'Yes' | 'No' | 'Pending';
+    shownInterestInMembership?: boolean;
+    membership?: boolean;
+    membershipVerification?: boolean;
+    state?: string;
+    district?: string;
+    womenEntrepreneur?: boolean;
+    noOfEmployeesInCompany?: string;
+    noOfAttendants?: string;
+    sector?: string;
+    sectorGeneralized?: string;
+    operationsPerfomedInBrief?: string;
+    scale?: string;
+    challenges?: string;
+    manualTasks?: string;
+    suggestedTools?: string;
+    toolCategories?: string;
+    aiFamiliarityPre?: string;
+    kpi?: string;
+    aiFamiliarityPost?: string;
+    kpiValue?: string;
+    howDidTheyGetToKnow?: string;
+    additionalNotes1?: string; // For "Column 35"
+    notesForReport?: string;
+    followUpRequestStatus?: 'Requested' | 'Not Requested' | 'Completed';
+    followUpStatus?: 'Done' | 'Pending';
+    meetingDone?: boolean;
+}
+
+export type BookingDetailsDocument = Omit<BookingDetails, 'id'>;

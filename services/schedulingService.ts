@@ -1,4 +1,4 @@
-import type { EventType, Booking, BookingDocument } from '../types';
+import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument } from '../types';
 import { addMinutes, format } from 'date-fns';
 import { googleApiService } from './googleApiService';
 import { db } from './firebaseService';
@@ -71,6 +71,29 @@ export const schedulingService = {
   },
 
   /**
+   * [LIVE] Fetches all booking details from Firestore.
+   */
+  getBookingDetails: async (): Promise<BookingDetails[]> => {
+    const detailsCollection = collection(db, 'bookingDetails');
+    const querySnapshot = await getDocs(detailsCollection);
+    return querySnapshot.docs.map(doc => {
+        const data = doc.data() as BookingDetailsDocument;
+        return {
+            id: doc.id,
+            ...data
+        } as BookingDetails;
+    });
+  },
+
+  /**
+   * [LIVE] Updates a booking details document in Firestore.
+   */
+  updateBookingDetails: async (detailsId: string, data: Partial<BookingDetailsDocument>): Promise<void> => {
+    const docRef = doc(db, 'bookingDetails', detailsId);
+    await updateDoc(docRef, data);
+  },
+
+  /**
    * [LIVE] Creates a new booking in Firestore and triggers Google integrations.
    */
   createBooking: async (bookingData: Omit<Booking, 'id' | 'endTime'>): Promise<Booking> => {
@@ -89,6 +112,44 @@ export const schedulingService = {
     
     const docRef = await addDoc(collection(db, 'bookings'), bookingToCreate);
     
+    // Create an empty corresponding bookingDetails document
+    const initialDetails: BookingDetailsDocument = {
+      companyName: '',
+      consultationDoneBy: '',
+      designation: '',
+      generalizedDesignation: '',
+      level: '',
+      capability: '',
+      feedbackSent: 'Pending',
+      shownInterestInMembership: false,
+      membership: false,
+      membershipVerification: false,
+      state: '',
+      district: '',
+      womenEntrepreneur: false,
+      noOfEmployeesInCompany: '',
+      noOfAttendants: '',
+      sector: '',
+      sectorGeneralized: '',
+      operationsPerfomedInBrief: '',
+      scale: '',
+      challenges: '',
+      manualTasks: '',
+      suggestedTools: '',
+      toolCategories: '',
+      aiFamiliarityPre: '',
+      kpi: '',
+      aiFamiliarityPost: '',
+      kpiValue: '',
+      howDidTheyGetToKnow: '',
+      additionalNotes1: '',
+      notesForReport: '',
+      followUpRequestStatus: 'Not Requested',
+      followUpStatus: 'Pending',
+      meetingDone: false,
+    };
+    await setDoc(doc(db, 'bookingDetails', docRef.id), initialDetails);
+
     let newBooking: Booking = {
         ...bookingToCreate,
         id: docRef.id,
