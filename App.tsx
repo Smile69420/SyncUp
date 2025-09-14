@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import Analytics from './components/Analytics';
 import BookingPage from './components/BookingPage';
@@ -17,7 +17,7 @@ const App: React.FC = () => {
     }, []);
 
     return (
-        <HashRouter>
+        <BrowserRouter>
             <div className="min-h-screen bg-background text-foreground">
                 <Header />
                 <main className="p-4 sm:p-6 lg:p-8">
@@ -29,7 +29,7 @@ const App: React.FC = () => {
                     </Routes>
                 </main>
             </div>
-        </HashRouter>
+        </BrowserRouter>
     );
 };
 

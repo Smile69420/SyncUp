@@ -56,7 +56,7 @@ const Dashboard: React.FC = () => {
     };
     
     const handleCopyLink = (link: string, id: string) => {
-        const fullLink = `${window.location.origin}${window.location.pathname}#${link}`;
+        const fullLink = `${window.location.origin}${link}`;
         navigator.clipboard.writeText(fullLink).then(() => {
             setCopiedLinkId(id);
             setTimeout(() => setCopiedLinkId(null), 2000);
