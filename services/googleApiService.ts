@@ -15,7 +15,7 @@ const SCOPES = [
 
 // --- REAL GOOGLE API SERVICE ---
 // This service interacts with the live Google APIs.
-// It requires the gapi and gis scripts to be loaded in index.html.
+// It now loads its own script dependencies dynamically.
 
 declare global {
   interface Window {
@@ -37,30 +37,26 @@ const notifySubscribers = () => {
 };
 
 /**
- * A helper function that returns a promise that resolves when a script has loaded.
- * It handles the race condition where the script might load before the listener is attached.
- * @param scriptSelector - A CSS selector to find the script tag.
- * @param readinessCheck - A function that returns true if the script's global object is available.
+ * Dynamically loads a script tag into the document head and returns a promise
+ * that resolves when the script is loaded. This is idempotent.
+ * @param id - A unique ID for the script tag.
+ * @param src - The source URL of the script to load.
  */
-const ensureScriptReady = (
-    scriptSelector: string,
-    readinessCheck: () => boolean
-): Promise<void> => {
+const loadScript = (id: string, src: string): Promise<void> => {
     return new Promise((resolve, reject) => {
-        if (readinessCheck()) {
+        const existingScript = document.getElementById(id);
+        if (existingScript) {
+            // If the script tag already exists, we assume it's either loaded or loading.
             return resolve();
         }
-
-        const script = document.querySelector(scriptSelector) as HTMLScriptElement;
-        if (!script) {
-            return reject(new Error(`Script not found: ${scriptSelector}`));
-        }
-
-        const handleLoad = () => resolve();
-        const handleError = () => reject(new Error(`Script failed to load: ${scriptSelector}`));
-
-        script.addEventListener('load', handleLoad);
-        script.addEventListener('error', handleError);
+        const script = document.createElement('script');
+        script.id = id;
+        script.src = src;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+        document.head.appendChild(script);
     });
 };
 
@@ -80,16 +76,9 @@ export const googleApiService = {
 
         initializationPromise = (async () => {
             try {
-                // First, ensure the script files themselves are loaded.
-                const gapiScriptReady = ensureScriptReady(
-                    'script[src="https://apis.google.com/js/api.js"]',
-                    () => typeof window.gapi !== 'undefined'
-                );
-                const gisScriptReady = ensureScriptReady(
-                    'script[src="https://accounts.google.com/gsi/client"]',
-                    () => typeof window.google !== 'undefined' && typeof window.google.accounts !== 'undefined'
-                );
-                await Promise.all([gapiScriptReady, gisScriptReady]);
+                // Dynamically load the Google API scripts for a more robust initialization process.
+                await loadScript('gapi-script', 'https://apis.google.com/js/api.js');
+                await loadScript('gis-script', 'https://accounts.google.com/gsi/client');
 
                 // Once scripts are loaded, use their functions to initialize the clients.
                 // gapi.load() is used to load specific client modules (e.g., 'client', 'oauth2').
@@ -97,7 +86,7 @@ export const googleApiService = {
                     window.gapi.load('client:oauth2', {
                         callback: resolve,
                         onerror: (err: any) => reject(new Error(`Failed to load GAPI modules: ${JSON.stringify(err)}`)),
-                        timeout: 30000, // Increased timeout to 30 seconds for reliability on slower networks.
+                        timeout: 30000,
                         ontimeout: () => reject(new Error('GAPI module loading timed out after 30 seconds.')),
                     });
                 });
