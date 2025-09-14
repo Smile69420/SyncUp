@@ -1,11 +1,11 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Sector } from 'recharts';
 import { schedulingService } from '../services/schedulingService';
 import type { Booking, EventType } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
-import { format, getHours } from 'date-fns';
+import Select from './ui/Select';
+import { format, getHours, subDays, startOfMonth, isAfter } from 'date-fns';
 
 const renderActiveShape = (props: any) => {
   const RADIAN = Math.PI / 180;
@@ -53,12 +53,69 @@ const renderActiveShape = (props: any) => {
   );
 };
 
+const MultiSelectEventType: React.FC<{
+    eventTypes: EventType[];
+    selectedIds: string[];
+    onChange: (ids: string[]) => void;
+}> = ({ eventTypes, selectedIds, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSelect = (id: string) => {
+        const newSelectedIds = selectedIds.includes(id)
+            ? selectedIds.filter(selectedId => selectedId !== id)
+            : [...selectedIds, id];
+        onChange(newSelectedIds);
+    };
+
+    return (
+        <div className="relative w-full md:w-64" ref={wrapperRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full text-left px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900 flex justify-between items-center"
+            >
+                <span>{selectedIds.length === 0 ? 'All Event Types' : `${selectedIds.length} types selected`}</span>
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            {isOpen && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    {eventTypes.map(et => (
+                        <label key={et.id} className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selectedIds.includes(et.id)}
+                                onChange={() => handleSelect(et.id)}
+                                className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"
+                            />
+                            <span className="ml-2 text-sm text-slate-800">{et.name}</span>
+                        </label>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const Analytics: React.FC = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [eventTypes, setEventTypes] = useState<EventType[]>([]);
     const [loading, setLoading] = useState(true);
     const [pieActiveIndex, setPieActiveIndex] = useState(0);
+
+    // Filter states
+    const [dateRange, setDateRange] = useState('all'); // 'all', '7d', '30d', 'month'
+    const [selectedEventTypeIds, setSelectedEventTypeIds] = useState<string[]>([]);
 
 
     useEffect(() => {
@@ -79,6 +136,29 @@ const Analytics: React.FC = () => {
         };
         fetchData();
     }, []);
+    
+    const filteredBookings = useMemo(() => {
+        let bookingsToFilter = bookings;
+
+        // Date range filter
+        const now = new Date();
+        if (dateRange === '7d') {
+            bookingsToFilter = bookingsToFilter.filter(b => isAfter(b.startTime, subDays(now, 7)));
+        } else if (dateRange === '30d') {
+            bookingsToFilter = bookingsToFilter.filter(b => isAfter(b.startTime, subDays(now, 30)));
+        } else if (dateRange === 'month') {
+            const startOfThisMonth = startOfMonth(now);
+            bookingsToFilter = bookingsToFilter.filter(b => isAfter(b.startTime, startOfThisMonth));
+        }
+
+        // Event type filter
+        if (selectedEventTypeIds.length > 0) {
+            bookingsToFilter = bookingsToFilter.filter(b => selectedEventTypeIds.includes(b.eventTypeId));
+        }
+
+        return bookingsToFilter;
+    }, [bookings, dateRange, selectedEventTypeIds]);
+
 
     const eventTypeMap = useMemo(() =>
         eventTypes.reduce((acc, et) => {
@@ -88,18 +168,18 @@ const Analytics: React.FC = () => {
 
     const bookingsPerDay = useMemo(() => {
         const counts: { [key: string]: number } = {};
-        bookings.forEach(booking => {
+        filteredBookings.forEach(booking => {
             const day = format(booking.startTime, 'yyyy-MM-dd');
             counts[day] = (counts[day] || 0) + 1;
         });
         return Object.entries(counts)
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => a.name.localeCompare(b.name));
-    }, [bookings]);
+    }, [filteredBookings]);
     
     const popularBookingTimes = useMemo(() => {
         const hourCounts = Array(24).fill(0);
-        bookings.forEach(booking => {
+        filteredBookings.forEach(booking => {
             const hour = getHours(booking.startTime);
             hourCounts[hour]++;
         });
@@ -107,16 +187,16 @@ const Analytics: React.FC = () => {
             name: `${hour}:00`,
             count,
         })).filter(item => item.count > 0);
-    }, [bookings]);
+    }, [filteredBookings]);
 
     const bookingsByEventType = useMemo(() => {
         const counts: { [key: string]: number } = {};
-        bookings.forEach(booking => {
+        filteredBookings.forEach(booking => {
             const eventTypeName = eventTypeMap[booking.eventTypeId]?.name || 'Unknown';
             counts[eventTypeName] = (counts[eventTypeName] || 0) + 1;
         });
         return Object.entries(counts).map(([name, value]) => ({ name, value }));
-    }, [bookings, eventTypeMap]);
+    }, [filteredBookings, eventTypeMap]);
 
     const eventTypeColors = useMemo(() => {
         return eventTypes.map(et => et.color);
@@ -130,10 +210,29 @@ const Analytics: React.FC = () => {
         <div className="container mx-auto space-y-8">
             <h1 className="text-3xl font-bold">Analytics</h1>
              <Card>
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                    <h2 className="text-xl font-semibold">Filters</h2>
+                    <div className="flex-grow flex flex-col md:flex-row gap-4 items-center w-full md:w-auto">
+                         <Select value={dateRange} onChange={e => setDateRange(e.target.value)} className="w-full md:w-48">
+                            <option value="all">All Time</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="30d">Last 30 Days</option>
+                            <option value="month">This Month</option>
+                        </Select>
+                        <MultiSelectEventType 
+                            eventTypes={eventTypes} 
+                            selectedIds={selectedEventTypeIds}
+                            onChange={setSelectedEventTypeIds}
+                        />
+                    </div>
+                </div>
+            </Card>
+
+             <Card>
                 <h2 className="text-xl font-semibold mb-4">Key Metrics</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                     <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-3xl font-bold text-primary">{bookings.length}</p>
+                        <p className="text-3xl font-bold text-primary">{filteredBookings.length}</p>
                         <p className="text-sm text-gray-500">Total Bookings</p>
                     </div>
                      <div className="p-4 bg-gray-50 rounded-lg">
@@ -146,7 +245,7 @@ const Analytics: React.FC = () => {
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                         <p className="text-3xl font-bold text-primary">
-                            {bookings.length > 0 ? (bookings.reduce((sum, b) => sum + (eventTypes.find(et => et.id === b.eventTypeId)?.duration || 0), 0) / 60).toFixed(1) : 0}
+                            {filteredBookings.length > 0 ? (filteredBookings.reduce((sum, b) => sum + (eventTypes.find(et => et.id === b.eventTypeId)?.duration || 0), 0) / 60).toFixed(1) : 0}
                         </p>
                         <p className="text-sm text-gray-500">Total Hours Booked</p>
                     </div>
@@ -156,58 +255,69 @@ const Analytics: React.FC = () => {
                 <Card>
                     <h2 className="text-xl font-semibold mb-4">Bookings by Event Type</h2>
                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                           <PieChart>
-                                {/* FIX: The 'activeIndex' prop is valid for the recharts Pie component but may be missing from the project's TypeScript definitions. Using a type assertion to suppress the error. */}
-                                <Pie 
-                                    {...{ activeIndex: pieActiveIndex } as any}
-                                    activeShape={renderActiveShape}
-                                    data={bookingsByEventType} 
-                                    cx="50%" 
-                                    cy="50%" 
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    dataKey="value"
-                                    onMouseEnter={(_, index) => setPieActiveIndex(index)}
-                                >
-                                    {bookingsByEventType.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={eventTypeColors[index % eventTypeColors.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
+                         {bookingsByEventType.length > 0 ? (
+                             <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie 
+                                        {...{ activeIndex: pieActiveIndex } as any}
+                                        activeShape={renderActiveShape}
+                                        data={bookingsByEventType} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        dataKey="value"
+                                        onMouseEnter={(_, index) => setPieActiveIndex(index)}
+                                    >
+                                        {bookingsByEventType.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={eventTypeColors[index % eventTypeColors.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                         ) : (
+                             <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>
+                         )}
                     </div>
                 </Card>
                  <Card>
                     <h2 className="text-xl font-semibold mb-4">Popular Booking Times</h2>
                     <div className="h-80">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={popularBookingTimes} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis allowDecimals={false} />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="count" fill="#0ea5e9" name="Bookings" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                        {popularBookingTimes.length > 0 ? (
+                             <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={popularBookingTimes} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis allowDecimals={false} />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="count" fill="#0ea5e9" name="Bookings" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                         ) : (
+                             <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>
+                         )}
                     </div>
                 </Card>
             </div>
             <Card>
                 <h2 className="text-xl font-semibold mb-4">Bookings per Day</h2>
                 <div className="h-80">
-                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={bookingsPerDay} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis allowDecimals={false} />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="count" fill="#4f46e5" name="Bookings" />
-                        </BarChart>
-                    </ResponsiveContainer>
+                     {bookingsPerDay.length > 0 ? (
+                         <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={bookingsPerDay} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" />
+                                <YAxis allowDecimals={false} />
+                                <Tooltip />
+                                <Legend />
+                                <Bar dataKey="count" fill="#4f46e5" name="Bookings" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                         <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>
+                     )}
                 </div>
             </Card>
         </div>

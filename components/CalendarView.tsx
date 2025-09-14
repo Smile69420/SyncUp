@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { Booking, EventType } from '../types';
 import {
     format, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isSameDay, startOfDay, addHours,
     startOfMonth, endOfMonth, isSameMonth, isToday, addMonths, subMonths, addWeeks, subWeeks, getDay,
+    getHours, getMinutes
 } from 'date-fns';
 import Button from './ui/Button';
 import BookingPreviewModal from './BookingPreviewModal';
@@ -13,6 +14,50 @@ interface CalendarViewProps {
 }
 
 type ViewType = 'month' | 'week' | 'day';
+
+const CALENDAR_START_HOUR = 9;
+const CALENDAR_END_HOUR = 18;
+const HOUR_HEIGHT_PX = 60; // Each hour is 60px tall
+
+const CurrentTimeIndicator: React.FC = () => {
+    const [topPosition, setTopPosition] = useState(0);
+    const intervalRef = useRef<number | null>(null);
+
+    const updatePosition = () => {
+        const now = new Date();
+        const hour = getHours(now);
+        const minutes = getMinutes(now);
+
+        if (hour >= CALENDAR_START_HOUR && hour < CALENDAR_END_HOUR) {
+            const minutesSinceStart = (hour - CALENDAR_START_HOUR) * 60 + minutes;
+            setTopPosition(minutesSinceStart * (HOUR_HEIGHT_PX / 60));
+        } else {
+            setTopPosition(-1); // Hide if outside business hours
+        }
+    };
+
+    useEffect(() => {
+        updatePosition(); // Initial position
+        intervalRef.current = window.setInterval(updatePosition, 60000); // Update every minute
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, []);
+
+    if (topPosition < 0) return null;
+
+    return (
+        <div className="absolute w-full z-20" style={{ top: `${topPosition}px` }}>
+            <div className="relative h-px bg-red-500">
+                <div className="absolute -left-2 -top-2 w-4 h-4 rounded-full bg-red-500"></div>
+            </div>
+        </div>
+    );
+};
+
 
 const CalendarView: React.FC<CalendarViewProps> = ({ bookings, eventTypes }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -158,17 +203,18 @@ const renderBookingsForDayColumn = (day: Date, bookings: Booking[], onEventClick
         const startMinute = booking.startTime.getMinutes();
         const endHour = booking.endTime.getHours();
         const endMinute = booking.endTime.getMinutes();
-
-        // Assuming calendar starts at 6 AM
-        const top = (startHour - 6) * 60 + startMinute;
-        const height = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+        
+        const top = ((startHour - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX) + (startMinute * (HOUR_HEIGHT_PX / 60));
+        const durationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+        const height = durationMinutes * (HOUR_HEIGHT_PX / 60);
 
         return (
             <div
                 key={booking.id}
-                className="absolute rounded-lg p-2 text-white text-xs overflow-hidden cursor-pointer hover:opacity-80 transition-opacity z-10"
+                className="absolute rounded-lg p-2 text-white text-xs overflow-hidden cursor-pointer hover:opacity-80 transition-opacity z-10 border"
                 style={{
                     backgroundColor: eventType.color,
+                    borderColor: `${eventType.color}dd`,
                     top: `${top}px`,
                     height: `${height}px`,
                     left: `${booking.left}%`,
@@ -185,26 +231,28 @@ const renderBookingsForDayColumn = (day: Date, bookings: Booking[], onEventClick
 };
 
 // --- VIEW COMPONENTS ---
-const TimeGrid: React.FC<{ dayCount: number }> = ({ dayCount }) => {
-    const hours = Array.from({ length: 18 }, (_, i) => i + 6); // 6 AM to 11 PM
+const TimeGrid: React.FC = () => {
+    const hours = Array.from({ length: CALENDAR_END_HOUR - CALENDAR_START_HOUR }, (_, i) => i + CALENDAR_START_HOUR);
 
     return (
-        <div className="grid grid-cols-1" style={{ gridTemplateRows: 'repeat(18, 60px)' }}>
-            {/* Time labels column */}
-            <div className="col-start-1 col-end-2 row-start-1" style={{ gridRowEnd: hours.length + 1 }}>
-                {hours.map(hour => (
-                    <div key={hour} className="h-[60px] relative text-right pr-2 text-xs text-gray-400">
-                        <span className="absolute -top-3 right-2">{format(addHours(startOfDay(new Date()), hour), 'ha')}</span>
-                    </div>
-                ))}
-            </div>
+        <div className="grid grid-cols-1" style={{ gridTemplateRows: `repeat(${hours.length}, ${HOUR_HEIGHT_PX}px)` }}>
+            {hours.map(hour => (
+                <div key={`line-${hour}`} className="h-full border-b border-gray-200"></div>
+            ))}
+        </div>
+    );
+};
 
-            {/* Grid lines */}
-            <div className="col-start-2 row-start-1 grid grid-cols-1 divide-y divide-gray-200" style={{ gridRowEnd: hours.length + 1, gridColumnEnd: dayCount + 2 }}>
-                {hours.map(hour => (
-                    <div key={`line-${hour}`} className="h-[60px]"></div>
-                ))}
-            </div>
+const TimeLabels: React.FC = () => {
+    const hours = Array.from({ length: CALENDAR_END_HOUR - CALENDAR_START_HOUR }, (_, i) => i + CALENDAR_START_HOUR);
+
+    return (
+        <div className="w-16 text-right pr-2">
+            {hours.map(hour => (
+                <div key={hour} className="h-[60px] relative text-xs text-gray-400">
+                    <span className="absolute -top-2 right-2">{format(addHours(startOfDay(new Date()), hour), 'ha')}</span>
+                </div>
+            ))}
         </div>
     );
 };
@@ -214,14 +262,15 @@ const WeekViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEv
 ({ currentDate, bookings, onEventClick, eventTypeMap }) => {
     const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
     const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
+    const totalGridHeight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
     
     return (
-        <div className="relative">
+        <div className="flex flex-col">
             {/* Sticky Header */}
-            <div className="sticky top-0 z-20 bg-white grid grid-cols-[4rem_repeat(7,minmax(0,1fr))] border-b border-gray-200">
-                <div className="w-16 border-r"></div> {/* Spacer for time column */}
+            <div className="sticky top-0 z-20 bg-white shadow-sm flex border-b border-gray-200">
+                <div className="w-16 border-r border-gray-200"></div> {/* Spacer for time column */}
                 {weekDays.map(day => (
-                    <div key={day.toString()} className={`text-center py-2 border-l border-gray-200 ${isToday(day) ? 'bg-blue-50' : ''}`}>
+                    <div key={day.toString()} className={`flex-1 text-center py-2 border-l border-gray-200 ${isToday(day) ? 'bg-blue-50' : ''}`}>
                         <p className="text-sm text-gray-500">{format(day, 'EEE')}</p>
                         <p className={`text-lg font-semibold ${isToday(day) ? 'text-primary' : ''}`}>{format(day, 'd')}</p>
                     </div>
@@ -229,18 +278,19 @@ const WeekViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEv
             </div>
 
             {/* Scrollable Body */}
-            <div className="grid grid-cols-[4rem_repeat(7,minmax(0,1fr))]">
-                 {/* Background Grid */}
-                <div className="col-start-1 col-end-9 row-start-1">
-                    <TimeGrid dayCount={7} />
-                </div>
-                
-                {/* Event Columns */}
-                {weekDays.map((day) => (
-                    <div key={day.toString()} className="relative border-l border-gray-200 h-[1080px]">
-                        {renderBookingsForDayColumn(day, bookings, onEventClick, eventTypeMap)}
+            <div className="flex">
+                <TimeLabels />
+                <div className="flex-1 grid grid-cols-7 relative border-l border-gray-200" style={{ height: `${totalGridHeight}px` }}>
+                    <div className="col-span-7 row-start-1 absolute inset-0">
+                        <TimeGrid />
                     </div>
-                ))}
+                    {weekDays.map((day) => (
+                        <div key={day.toString()} className="relative border-l border-gray-200">
+                             {isToday(day) && <CurrentTimeIndicator />}
+                             {renderBookingsForDayColumn(day, bookings, onEventClick, eventTypeMap)}
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -248,26 +298,19 @@ const WeekViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEv
 
 const DayViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEventClick: (b: Booking) => void, eventTypeMap: Record<string, EventType> }> = 
 ({ currentDate, bookings, onEventClick, eventTypeMap }) => {
+    const totalGridHeight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
+    
     return (
-        <div className="relative">
-            {/* Sticky Header */}
-            <div className="sticky top-0 z-20 bg-white grid grid-cols-[4rem_1fr] border-b border-gray-200">
-                <div className="w-16 border-r"></div> {/* Spacer */}
-                <div className={`text-center py-2 border-l border-gray-200 ${isToday(currentDate) ? 'bg-blue-50' : ''}`}>
-                    {/* The date is already in the main header, so this can be simpler or removed */}
-                </div>
-            </div>
-
-            {/* Scrollable Body */}
-            <div className="grid grid-cols-[4rem_1fr]">
-                 {/* Background Grid */}
-                <div className="col-start-1 col-end-3 row-start-1">
-                    <TimeGrid dayCount={1} />
-                </div>
-                
-                {/* Event Column */}
-                <div className="relative border-l border-gray-200 h-[1080px]">
-                    {renderBookingsForDayColumn(currentDate, bookings, onEventClick, eventTypeMap)}
+        <div className="flex flex-col">
+            {/* Header is part of the main component, so no need for a sticky header here */}
+            <div className="flex">
+                <TimeLabels />
+                <div className="flex-1 relative border-l border-gray-200" style={{ height: `${totalGridHeight}px` }}>
+                    <TimeGrid />
+                    <div className="absolute inset-0">
+                        {isToday(currentDate) && <CurrentTimeIndicator />}
+                        {renderBookingsForDayColumn(currentDate, bookings, onEventClick, eventTypeMap)}
+                    </div>
                 </div>
             </div>
         </div>
