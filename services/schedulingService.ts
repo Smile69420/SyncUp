@@ -157,29 +157,29 @@ export const schedulingService = {
    * [LIVE] Saves an event type (creates or updates) to Firestore.
    */
   saveEventType: async (eventTypeData: Omit<EventType, 'id' | 'link'> & { id?: string }): Promise<EventType> => {
-     if (eventTypeData.id) {
+     // Create a deep copy and remove any undefined values, which are not allowed by Firestore.
+     // JSON.stringify omits keys with `undefined` values. This is a critical step for data sanitization.
+     const dataToSave = JSON.parse(JSON.stringify(eventTypeData));
+
+     if (dataToSave.id) {
          // Update existing event
-         const docRef = doc(db, 'eventTypes', eventTypeData.id);
-         const dataToUpdate = { ...eventTypeData };
-         delete dataToUpdate.id; // Don't store the id in the document body
-         await setDoc(docRef, dataToUpdate, { merge: true });
-         return { ...eventTypeData, link: `/book/${eventTypeData.id}` } as EventType;
+         const docId = dataToSave.id;
+         const docRef = doc(db, 'eventTypes', docId);
+         delete dataToSave.id; // Don't store the id in the document body
+         await setDoc(docRef, dataToSave, { merge: true });
+
+         // Reconstruct the full object to return, ensuring it has the ID and link.
+         return { ...dataToSave, id: docId, link: `/book/${docId}` } as EventType;
      } else {
          // Create new event
          const newDocRef = doc(collection(db, 'eventTypes'));
          const newId = newDocRef.id;
          
-         const newEventType: EventType = {
-             ...(eventTypeData as Omit<EventType, 'id' | 'link'>), // Cast to remove id property from type
-             id: newId,
-             link: `/book/${newId}`,
-         };
-         
-         const dataToSave = { ...newEventType };
-         delete dataToSave.id; // Don't store id in the document body
-         
+         // `dataToSave` is already clean (no undefined) and has no 'id' property.
          await setDoc(newDocRef, dataToSave);
-         return newEventType;
+
+         // Reconstruct the full object to return, adding the new ID and link.
+         return { ...dataToSave, id: newId, link: `/book/${newId}` } as EventType;
      }
   }
 };

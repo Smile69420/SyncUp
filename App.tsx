@@ -1,14 +1,27 @@
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Outlet, useNavigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import Analytics from './components/Analytics';
 import BookingPage from './components/BookingPage';
 import ConfirmationPage from './components/ConfirmationPage';
-import { schedulingService } from './services/schedulingService';
 import { googleApiService } from './services/googleApiService';
-import type { EventType, Booking } from './types';
 import GoogleAuthButton from './components/GoogleAuthButton';
+import LoginPage from './components/LoginPage';
+import ProtectedRoute from './components/ProtectedRoute';
+
+
+const Layout: React.FC = () => {
+    return (
+        <div className="min-h-screen bg-background text-foreground">
+            <Header />
+            <main className="p-4 sm:p-6 lg:p-8">
+                <Outlet />
+            </main>
+        </div>
+    );
+};
+
 
 const App: React.FC = () => {
 
@@ -18,17 +31,20 @@ const App: React.FC = () => {
 
     return (
         <BrowserRouter>
-            <div className="min-h-screen bg-background text-foreground">
-                <Header />
-                <main className="p-4 sm:p-6 lg:p-8">
-                    <Routes>
+            <Routes>
+                {/* Public routes that do not require authentication */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/book/:eventTypeId" element={<BookingPage />} />
+                <Route path="/confirmed" element={<ConfirmationPage />} />
+
+                {/* Protected routes that require authentication */}
+                <Route element={<ProtectedRoute />}>
+                    <Route element={<Layout />}>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/analytics" element={<Analytics />} />
-                        <Route path="/book/:eventTypeId" element={<BookingPage />} />
-                        <Route path="/confirmed" element={<ConfirmationPage />} />
-                    </Routes>
-                </main>
-            </div>
+                    </Route>
+                </Route>
+            </Routes>
         </BrowserRouter>
     );
 };

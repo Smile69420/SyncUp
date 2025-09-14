@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { googleApiService } from '../services/googleApiService';
 import Button from './ui/Button';
 
@@ -8,6 +9,7 @@ const GoogleAuthButton: React.FC = () => {
     const [userProfile, setUserProfile] = useState<any | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         const unsubscribe = googleApiService.subscribe((signedIn, profile) => {
@@ -36,7 +38,8 @@ const GoogleAuthButton: React.FC = () => {
 
     const handleSignOut = () => {
         googleApiService.signOut();
-        setIsDropdownOpen(false);
+        sessionStorage.removeItem('isAuthenticated');
+        navigate('/login');
     };
 
     if (!isSignedIn) {
