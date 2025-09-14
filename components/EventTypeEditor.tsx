@@ -91,11 +91,55 @@ const PresetSelector = ({ label, value, onChange, options, unit, inputClasses })
     );
 };
 
+// Helper function to resize and convert image to a compressed Base64 string
+const processImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800;
+                const MAX_HEIGHT = 600;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                
+                // Get data URL as JPEG for compression, with 80% quality
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                resolve(dataUrl);
+            };
+            img.onerror = error => reject(error);
+        };
+        reader.onerror = error => reject(error);
+    });
+};
+
+
 const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, onSave }) => {
     const [name, setName] = useState('');
     const [duration, setDuration] = useState(30);
     const [description, setDescription] = useState('');
     const [color, setColor] = useState('#4f46e5');
+    const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
     const [mode, setMode] = useState<'online' | 'offline'>('online');
     const [location, setLocation] = useState('');
     const [conferencing, setConferencing] = useState<EventType['conferencing']>({ provider: 'google-meet' });
@@ -121,6 +165,7 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
             setDuration(eventType.duration);
             setDescription(eventType.description);
             setColor(eventType.color);
+            setImageUrl(eventType.imageUrl);
             setMode(eventType.mode || 'online');
             setLocation(eventType.location || '');
             setConferencing(eventType.conferencing || { provider: 'google-meet' });
@@ -137,6 +182,7 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
              setName('New Event');
              setDuration(30);
              setDescription('');
+             setImageUrl(undefined);
              setMode('online');
              setLocation('5th Floor, MCCIA SB Road, Pune');
              setConferencing({ provider: 'google-meet' });
@@ -184,6 +230,19 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
             setAvailability(availability.filter(rule => rule.dayOfWeek !== dayIndex));
         } else {
             setAvailability([...availability, { dayOfWeek: dayIndex, startTime: '09:00', endTime: '17:00' }]);
+        }
+    };
+    
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            try {
+                const base64Image = await processImage(file);
+                setImageUrl(base64Image);
+            } catch (error) {
+                console.error("Error processing image:", error);
+                alert("There was an error processing your image. Please try another one.");
+            }
         }
     };
 
@@ -311,6 +370,7 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
             duration,
             description,
             color,
+            imageUrl,
             mode,
             location,
             conferencing,
@@ -366,6 +426,24 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                 <div className="md:col-span-2">
                                     <label htmlFor="description" className="block text-sm font-medium text-slate-700">Description</label>
                                     <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} rows={3} className={inputClasses}/>
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-slate-700">Preview Image</label>
+                                    <div className="mt-1 flex items-center gap-4">
+                                        <div className="w-32 h-20 bg-slate-100 rounded-md flex items-center justify-center border">
+                                             {imageUrl ? (
+                                                <img src={imageUrl} alt="Preview" className="w-full h-full object-cover rounded-md"/>
+                                             ) : (
+                                                <span className="text-xs text-slate-500">No Image</span>
+                                             )}
+                                        </div>
+                                        <div className="flex-grow">
+                                             <input type="file" id="image-upload" accept="image/png, image/jpeg" onChange={handleImageUpload} className="hidden"/>
+                                             <Button variant="outline" size="sm" onClick={() => document.getElementById('image-upload')?.click()}>Upload Image</Button>
+                                             {imageUrl && <Button variant="outline" size="sm" onClick={() => setImageUrl(undefined)} className="ml-2">Remove</Button>}
+                                             <p className="text-xs text-slate-500 mt-2">Recommended: 800x400px. Used for link previews.</p>
+                                        </div>
+                                    </div>
                                 </div>
                                  <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-slate-700">Meeting Mode</label>

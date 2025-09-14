@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { schedulingService } from '../services/schedulingService';
@@ -60,6 +59,28 @@ const BookingPage: React.FC = () => {
         };
         fetchData();
     }, [eventTypeId]);
+    
+    // Effect to update meta tags for rich link previews
+    useEffect(() => {
+        if (eventType) {
+            document.title = eventType.name;
+            document.querySelector('meta[property="og:title"]')?.setAttribute('content', eventType.name);
+            document.querySelector('meta[property="og:description"]')?.setAttribute('content', eventType.description);
+            document.querySelector('meta[property="og:url"]')?.setAttribute('content', window.location.href);
+            if(eventType.imageUrl) {
+                 document.querySelector('meta[property="og:image"]')?.setAttribute('content', eventType.imageUrl);
+            }
+        }
+        
+        // Cleanup function to reset meta tags on component unmount
+        return () => {
+            document.title = 'SyncUp: Team Scheduler';
+            document.querySelector('meta[property="og:title"]')?.setAttribute('content', 'SyncUp: Team Scheduler');
+            document.querySelector('meta[property="og:description"]')?.setAttribute('content', 'A modern scheduling application for seamless team coordination.');
+            document.querySelector('meta[property="og:image"]')?.setAttribute('content', '');
+            document.querySelector('meta[property="og:url"]')?.setAttribute('content', '');
+        }
+    }, [eventType]);
 
     const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
@@ -324,6 +345,11 @@ const BookingPage: React.FC = () => {
     
     const LeftPanel = () => (
         <div className="md:col-span-1 md:border-r md:pr-8 space-y-4">
+             {eventType.imageUrl && (
+                <div className="w-full h-40 bg-slate-100 rounded-lg overflow-hidden mb-4">
+                    <img src={eventType.imageUrl} alt={eventType.name} className="w-full h-full object-cover" />
+                </div>
+             )}
              <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: eventType.color }}></div>
             <h1 className="text-2xl font-bold">{eventType.name}</h1>
             <p className="text-slate-500 font-medium">

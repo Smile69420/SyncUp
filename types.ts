@@ -33,6 +33,7 @@ export interface EventType {
   availability: Availability[];
   link: string;
   customFormFields: FormField[];
+  imageUrl?: string; // Base64 encoded image for previews
   bufferBefore?: number; // in minutes
   bufferAfter?: number; // in minutes
   unavailability?: Availability[]; // Re-using the same structure for blocked times
