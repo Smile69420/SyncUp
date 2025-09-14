@@ -1,18 +1,17 @@
-// FIX: Manually define the types for `import.meta.env` to resolve TypeScript errors
-// related to Vite environment variables. This avoids issues where the build environment
-// may not correctly load the `vite/client` type definitions.
+
+// FIX: Extend the global ImportMetaEnv interface to include custom Vite environment variables.
+// This uses TypeScript's declaration merging to add types safely without conflicting with
+// base types provided by Vite, resolving the "Subsequent property declarations" error.
 declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_FIREBASE_API_KEY: string;
-      readonly VITE_FIREBASE_AUTH_DOMAIN: string;
-      readonly VITE_FIREBASE_PROJECT_ID: string;
-      readonly VITE_FIREBASE_STORAGE_BUCKET: string;
-      readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
-      readonly VITE_FIREBASE_APP_ID: string;
-      readonly VITE_GOOGLE_API_KEY: string;
-      readonly VITE_GOOGLE_CLIENT_ID: string;
-    }
+  interface ImportMetaEnv {
+    readonly VITE_FIREBASE_API_KEY: string;
+    readonly VITE_FIREBASE_AUTH_DOMAIN: string;
+    readonly VITE_FIREBASE_PROJECT_ID: string;
+    readonly VITE_FIREBASE_STORAGE_BUCKET: string;
+    readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
+    readonly VITE_FIREBASE_APP_ID: string;
+    readonly VITE_GOOGLE_API_KEY: string;
+    readonly VITE_GOOGLE_CLIENT_ID: string;
   }
 }
 

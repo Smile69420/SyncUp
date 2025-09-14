@@ -15,7 +15,7 @@ const Layout: React.FC = () => {
     return (
         <div className="min-h-screen bg-background text-foreground">
             <Header />
-            <main className="p-4 sm:p-6 lg:p-8">
+            <main className="container mx-auto p-4 sm:p-6 lg:p-8">
                 <Outlet />
             </main>
         </div>
@@ -51,7 +51,7 @@ const App: React.FC = () => {
 
 const Header: React.FC = () => {
     return (
-        <header className="bg-card border-b border-gray-200 sticky top-0 z-30">
+        <header className="bg-card border-b border-gray-200 sticky top-0 z-30 no-print">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     <Link to="/" className="flex items-center space-x-2">

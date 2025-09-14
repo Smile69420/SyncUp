@@ -244,16 +244,16 @@ const BookingPage: React.FC = () => {
     };
 
 
-    if (loading) return <div className="flex justify-center items-center h-96"><Spinner /></div>;
-    if (!eventType) return <div className="text-center text-red-500">Event type not found.</div>;
+    if (loading) return <div className="flex justify-center items-center h-screen"><Spinner /></div>;
+    if (!eventType) return <div className="text-center text-red-500 p-8">Event type not found.</div>;
     
     const Calendar = () => {
         const monthStart = startOfMonth(currentMonth);
         const monthEnd = endOfMonth(monthStart);
-        const calendarStart = startOfWeek(monthStart);
-        const calendarEnd = endOfWeek(monthEnd);
+        const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+        const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
         const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-        const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
         return (
             <div>
@@ -262,10 +262,10 @@ const BookingPage: React.FC = () => {
                     <h3 className="font-semibold text-lg">{format(currentMonth, 'MMMM yyyy')}</h3>
                     <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-slate-100">&gt;</button>
                 </div>
-                <div className="grid grid-cols-7 gap-1 text-center text-sm text-slate-500">
+                <div className="grid grid-cols-7 gap-1 text-center text-sm text-slate-500 mb-2">
                     {weekDays.map(day => <div key={day}>{day}</div>)}
                 </div>
-                 <div className="grid grid-cols-7 gap-1 mt-2">
+                 <div className="grid grid-cols-7 gap-1">
                     {days.map(day => {
                         const isSelected = selectedDate && isSameDay(day, selectedDate);
                         const isPast = isBefore(day, startOfDay(new Date())) && !isToday(day);
@@ -282,126 +282,133 @@ const BookingPage: React.FC = () => {
                         const hasAvailability = eventType.availability.some(rule => rule.dayOfWeek === day.getDay()) && !isDayFullyBlocked;
 
                         const isDisabled = isPast || !isCurrentMonth || !hasAvailability || isBeyondHorizon;
-
-                        let dayClassName = 'w-10 h-10 rounded-full transition-colors';
-
-                        if (!isCurrentMonth) {
-                            dayClassName += ' text-slate-300 cursor-not-allowed';
-                        } else if (isPast || isBeyondHorizon) {
-                            dayClassName += ' text-slate-400 cursor-not-allowed';
-                        } else if (hasAvailability) {
-                            dayClassName += ' bg-green-100 text-green-800 hover:bg-green-200';
-                        } else { // Unavailable future date within horizon
-                            dayClassName += ' bg-red-100 text-red-800 cursor-not-allowed';
-                        }
-
-                        if (isSelected) {
-                            dayClassName = 'w-10 h-10 rounded-full transition-colors bg-primary text-white hover:bg-primary/90';
-                        } else if (isToday(day)) {
-                            dayClassName += ' border border-primary';
+                        
+                        let dayClassName = 'w-10 h-10 flex items-center justify-center rounded-full transition-colors font-medium';
+                        
+                        if (isDisabled) {
+                            dayClassName += isCurrentMonth ? ' text-slate-400 cursor-not-allowed' : ' text-slate-300 cursor-not-allowed';
+                        } else {
+                            dayClassName += ' bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer';
                         }
                         
+                        if (isSelected) {
+                             dayClassName = 'w-10 h-10 flex items-center justify-center rounded-full transition-colors font-medium bg-primary text-white hover:bg-primary/90';
+                        }
+                        
+                        if (isToday(day) && !isSelected) {
+                            dayClassName += ' ring-2 ring-primary';
+                        }
+
                         return (
-                             <button
-                                key={day.toString()}
-                                disabled={isDisabled}
-                                onClick={() => setSelectedDate(day)}
-                                className={dayClassName}
-                            >
-                                {format(day, 'd')}
-                            </button>
+                             <div key={day.toString()} className="flex justify-center items-center">
+                                <button
+                                    disabled={isDisabled}
+                                    onClick={() => setSelectedDate(day)}
+                                    className={dayClassName}
+                                >
+                                    {format(day, 'd')}
+                                </button>
+                             </div>
                         )
                     })}
                 </div>
             </div>
         );
     };
+    
+    const LeftPanel = () => (
+        <div className="md:col-span-1 md:border-r md:pr-8 space-y-4">
+             <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: eventType.color }}></div>
+            <h1 className="text-2xl font-bold">{eventType.name}</h1>
+            <p className="text-slate-500 font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mr-2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>
+                {eventType.duration} minutes
+            </p>
+            <p className="text-slate-600">{eventType.description}</p>
+            <p className="text-sm text-slate-500 pt-4 border-t">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mr-2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                Timezone: {timeZone}
+            </p>
+        </div>
+    );
 
     return (
-        <div className="max-w-4xl mx-auto bg-card p-4 sm:p-6 md:p-8 rounded-lg shadow-xl grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Left Panel: Event Info */}
-            <div className="md:col-span-1 md:border-r md:pr-6">
-                 <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: eventType.color }}></div>
-                <h1 className="text-2xl font-bold mt-4">{eventType.name}</h1>
-                <p className="text-slate-500 mt-2">{eventType.duration} minutes</p>
-                <p className="mt-4 text-slate-600">{eventType.description}</p>
-                <p className="mt-4 text-sm text-slate-500">Timezone: {timeZone}</p>
-                 {selectedSlot && (
-                     <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <h3 className="font-semibold text-slate-800">Selected Time:</h3>
-                        <p className="text-primary font-bold">{format(selectedSlot, 'PPPP p')}</p>
-                     </div>
-                 )}
-            </div>
-            
-            {/* Right Panel: Booking Flow */}
-            <div className="md:col-span-2">
-                {!selectedSlot ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="min-h-screen bg-white md:bg-background flex justify-center items-center p-0 md:p-4">
+            <div className="w-full max-w-4xl bg-card p-4 sm:p-6 md:p-8 rounded-none md:rounded-lg md:shadow-xl grid grid-cols-1 md:grid-cols-3 gap-8">
+                <LeftPanel />
+                
+                <div className="md:col-span-2">
+                    {!selectedSlot ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[400px]">
+                            <div>
+                                 <h2 className="text-xl font-semibold mb-4">Select a Date</h2>
+                                 <Calendar />
+                            </div>
+                            <div className="relative">
+                                {selectedDate && (
+                                    <>
+                                     <h2 className="text-xl font-semibold mb-4">{format(selectedDate, 'EEEE, LLL d')}</h2>
+                                    <div className="grid grid-cols-2 gap-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
+                                        {availableSlots.length > 0 ? (
+                                            availableSlots.map(slot => (
+                                                <Button 
+                                                    key={slot.startTime.toISOString()}
+                                                    variant="outline"
+                                                    onClick={() => setSelectedSlot(slot.startTime)}
+                                                >
+                                                    {format(slot.startTime, 'p')}
+                                                </Button>
+                                            ))
+                                        ) : (
+                                            <p className="col-span-2 text-center text-slate-500 mt-8">No available slots for this day.</p>
+                                        )}
+                                    </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
                         <div>
-                             <h2 className="text-xl font-semibold mb-2">Select a Date</h2>
-                             <Calendar />
-                        </div>
-                        <div className="relative">
-                            {selectedDate && (
-                                <>
-                                 <h2 className="text-xl font-semibold mb-2">{format(selectedDate, 'EEEE, LLL d')}</h2>
-                                <div className="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-2">
-                                    {availableSlots.length > 0 ? (
-                                        availableSlots.map(slot => (
-                                            <Button 
-                                                key={slot.startTime.toISOString()}
-                                                variant="outline"
-                                                onClick={() => setSelectedSlot(slot.startTime)}
-                                            >
-                                                {format(slot.startTime, 'p')}
-                                            </Button>
-                                        ))
-                                    ) : (
-                                        <p className="col-span-2 text-center text-slate-500 mt-8">No available slots for this day.</p>
-                                    )}
+                            <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <h3 className="font-semibold text-slate-800">Selected Time:</h3>
+                                <p className="text-primary font-bold text-lg">{format(selectedSlot, 'PPPP p')}</p>
+                             </div>
+                             <h2 className="text-xl font-semibold">Enter Your Details</h2>
+                             <div className="space-y-4 mt-4">
+                                <div>
+                                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Name *</label>
+                                    <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                                    {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
                                 </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                ) : (
-                    <div>
-                         <h2 className="text-xl font-semibold">Enter Your Details</h2>
-                         <div className="space-y-4 mt-4">
-                            <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-slate-700">Name *</label>
-                                <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
-                                {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
-                            </div>
-                            <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
-                                <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
-                                 {formErrors.email && <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>}
-                            </div>
-                            <div>
-                                <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number *</label>
-                                <input type="tel" id="phone" value={phone} onChange={e => setPhone(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
-                                {formErrors.phone && <p className="text-xs text-red-500 mt-1">{formErrors.phone}</p>}
-                            </div>
-                            {eventType.customFormFields.map(field => (
-                                <div key={field.id}>
-                                    {field.type !== 'checkbox' && (
-                                         <label htmlFor={field.id} className="block text-sm font-medium text-slate-700">{field.label} {field.required && '*'}</label>
-                                    )}
-                                   {renderFormField(field)}
-                                    {formErrors[field.id] && <p className="text-xs text-red-500 mt-1">{formErrors[field.id]}</p>}
+                                <div>
+                                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
+                                    <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                                     {formErrors.email && <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>}
                                 </div>
-                            ))}
-                            <div className="flex items-center space-x-4 pt-2">
-                                 <Button onClick={handleConfirmBooking} disabled={isBooking} className="w-full">
-                                    {isBooking ? <Spinner size="sm" /> : 'Confirm Booking'}
-                                </Button>
-                                 <Button variant="outline" onClick={() => setSelectedSlot(null)} className="w-full">Back</Button>
-                            </div>
-                         </div>
-                    </div>
-                )}
+                                <div>
+                                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number *</label>
+                                    <input type="tel" id="phone" value={phone} onChange={e => setPhone(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                                    {formErrors.phone && <p className="text-xs text-red-500 mt-1">{formErrors.phone}</p>}
+                                </div>
+                                {eventType.customFormFields.map(field => (
+                                    <div key={field.id}>
+                                        {field.type !== 'checkbox' && (
+                                             <label htmlFor={field.id} className="block text-sm font-medium text-slate-700">{field.label} {field.required && '*'}</label>
+                                        )}
+                                       {renderFormField(field)}
+                                        {formErrors[field.id] && <p className="text-xs text-red-500 mt-1">{formErrors[field.id]}</p>}
+                                    </div>
+                                ))}
+                                <div className="flex items-center space-x-4 pt-2">
+                                     <Button onClick={handleConfirmBooking} disabled={isBooking} className="w-full">
+                                        {isBooking ? <Spinner size="sm" /> : 'Confirm Booking'}
+                                    </Button>
+                                     <Button variant="outline" onClick={() => setSelectedSlot(null)} className="w-full">Back</Button>
+                                </div>
+                             </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

@@ -45,6 +45,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, eventTypes }) => 
     const handleEventClick = (booking: Booking) => {
         setSelectedBooking(booking);
     };
+    
+    const handlePrint = () => {
+        window.print();
+    };
+
 
     const Header = () => {
         let title = '';
@@ -69,28 +74,34 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, eventTypes }) => 
         return (
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center rounded-md border">
+                    <div className="flex items-center rounded-md border no-print">
                         <button onClick={handlePrev} className="p-2 text-gray-500 hover:bg-gray-100 rounded-l-md border-r">&lt;</button>
                         <button onClick={handleToday} className="px-4 py-2 text-sm font-medium hover:bg-gray-100 border-r">Today</button>
                         <button onClick={handleNext} className="p-2 text-gray-500 hover:bg-gray-100 rounded-r-md">&gt;</button>
                     </div>
                     <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
                 </div>
-                <div className="flex items-center bg-gray-100 p-1 rounded-md">
-                   {viewOptions.map(option => (
-                        <button 
-                            key={option.value}
-                            onClick={() => setView(option.value)}
-                            className={`px-3 py-1 text-sm font-medium rounded-md ${view === option.value ? 'bg-white shadow' : 'text-gray-600 hover:bg-white/60'}`}
-                        >{option.label}</button>
-                   ))}
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center bg-gray-100 p-1 rounded-md no-print">
+                       {viewOptions.map(option => (
+                            <button 
+                                key={option.value}
+                                onClick={() => setView(option.value)}
+                                className={`px-3 py-1 text-sm font-medium rounded-md ${view === option.value ? 'bg-white shadow' : 'text-gray-600 hover:bg-white/60'}`}
+                            >{option.label}</button>
+                       ))}
+                    </div>
+                     <Button variant="outline" size="sm" onClick={handlePrint} className="no-print">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+                        <span className="ml-2">Print</span>
+                    </Button>
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full printable-area">
             <Header />
             <div className="flex-grow overflow-auto custom-scrollbar">
                 {view === 'week' && <WeekViewComponent currentDate={currentDate} bookings={bookings} onEventClick={handleEventClick} eventTypeMap={eventTypeMap} />}
@@ -166,8 +177,8 @@ const renderBookingsForDayColumn = (day: Date, bookings: Booking[], onEventClick
                 }}
                 onClick={() => onEventClick(booking)}
             >
-                <p className="font-bold whitespace-nowrap overflow-hidden text-ellipsis">{eventType.name}</p>
-                <p className="whitespace-nowrap overflow-hidden text-ellipsis">{booking.bookerName}</p>
+                <p className="font-bold whitespace-nowrap overflow-hidden text-ellipsis">{booking.bookerName}</p>
+                <p className="text-xs opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{eventType.name}</p>
             </div>
         );
     });
@@ -295,7 +306,7 @@ const MonthViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onE
                                             style={{ backgroundColor: eventType?.color || '#64748b' }}
                                         >
                                             <span className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis block">{format(booking.startTime, 'p')}</span>
-                                            <span className="whitespace-nowrap overflow-hidden text-ellipsis block">{eventType?.name}</span>
+                                            <span className="whitespace-nowrap overflow-hidden text-ellipsis block">{booking.bookerName}</span>
                                         </button>
                                     );
                                 })}
