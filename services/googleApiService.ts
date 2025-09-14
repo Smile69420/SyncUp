@@ -36,28 +36,44 @@ const notifySubscribers = () => {
     subscribers.forEach(cb => cb(_isSignedIn, _userProfile, _initializationState));
 };
 
+const scriptPromises: Record<string, Promise<void>> = {};
+
 /**
  * Dynamically loads a script tag into the document head and returns a promise
- * that resolves when the script is loaded. This is idempotent.
+ * that resolves when the script is loaded. This is idempotent and handles race conditions.
  * @param id - A unique ID for the script tag.
  * @param src - The source URL of the script to load.
  */
 const loadScript = (id: string, src: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
+    // If a promise for this script already exists, return it to avoid duplicate loading.
+    if (scriptPromises[id]) {
+        return scriptPromises[id];
+    }
+    
+    // Create a new promise for this script and store it in the cache.
+    scriptPromises[id] = new Promise((resolve, reject) => {
         const existingScript = document.getElementById(id);
         if (existingScript) {
-            // If the script tag already exists, we assume it's either loaded or loading.
-            return resolve();
+            // Script tag already exists, assume it's loaded or will load.
+            // This can happen with fast re-renders or if loaded by other means.
+             return resolve();
         }
+
         const script = document.createElement('script');
         script.id = id;
         script.src = src;
         script.async = true;
         script.defer = true;
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+        script.onerror = () => {
+            // On failure, remove the promise from cache to allow future retries.
+            delete scriptPromises[id];
+            reject(new Error(`Failed to load script: ${src}`));
+        };
         document.head.appendChild(script);
     });
+    
+    return scriptPromises[id];
 };
 
 
