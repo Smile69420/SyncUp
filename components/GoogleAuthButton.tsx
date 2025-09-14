@@ -3,18 +3,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { googleApiService } from '../services/googleApiService';
 import Button from './ui/Button';
+import Spinner from './ui/Spinner';
 
 const GoogleAuthButton: React.FC = () => {
     const [isSignedIn, setIsSignedIn] = useState(false);
     const [userProfile, setUserProfile] = useState<any | null>(null);
+    const [initState, setInitState] = useState<'pending' | 'success' | 'failed'>('pending');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
-        const unsubscribe = googleApiService.subscribe((signedIn, profile) => {
+        const unsubscribe = googleApiService.subscribe((signedIn, profile, init) => {
             setIsSignedIn(signedIn);
             setUserProfile(profile);
+            setInitState(init);
         });
 
         // Handle clicks outside of the dropdown to close it
@@ -41,6 +44,23 @@ const GoogleAuthButton: React.FC = () => {
         sessionStorage.removeItem('isAuthenticated');
         navigate('/login');
     };
+
+    if (initState === 'pending') {
+        return (
+            <Button size="sm" disabled>
+                <Spinner size="sm" />
+                <span className="ml-2">Connecting...</span>
+            </Button>
+        );
+    }
+
+    if (initState === 'failed') {
+        return (
+            <Button size="sm" disabled title="Connection to Google failed. Check browser console and API configuration.">
+                Connection Failed
+            </Button>
+        );
+    }
 
     if (!isSignedIn) {
         return (

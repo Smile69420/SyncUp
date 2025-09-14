@@ -29,10 +29,11 @@ let initializationPromise: Promise<void> | null = null;
 let tokenClient: any = null;
 let _isSignedIn = false;
 let _userProfile: any = null;
-const subscribers: ((isSignedIn: boolean, profile: any | null) => void)[] = [];
+let _initializationState: 'pending' | 'success' | 'failed' = 'pending';
+const subscribers: ((isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed') => void)[] = [];
 
 const notifySubscribers = () => {
-    subscribers.forEach(cb => cb(_isSignedIn, _userProfile));
+    subscribers.forEach(cb => cb(_isSignedIn, _userProfile, _initializationState));
 };
 
 /**
@@ -73,6 +74,9 @@ export const googleApiService = {
         if (initializationPromise) {
             return initializationPromise;
         }
+        
+        _initializationState = 'pending';
+        notifySubscribers();
 
         initializationPromise = (async () => {
             try {
@@ -136,11 +140,14 @@ export const googleApiService = {
                 });
                 console.log('GIS client initialized.');
                 console.log('Google API Service fully initialized.');
-
+                _initializationState = 'success';
+                notifySubscribers();
             } catch (error) {
                 console.error("Google API Service initialization failed:", error);
                 // Invalidate the promise so initialization can be retried on a subsequent call.
                 initializationPromise = null;
+                _initializationState = 'failed';
+                notifySubscribers();
                 // Re-throw to allow callers to handle the failure.
                 throw error;
             }
@@ -154,10 +161,10 @@ export const googleApiService = {
      * @param callback - The function to call when the auth state changes.
      * @returns An unsubscribe function.
      */
-    subscribe: (callback: (isSignedIn: boolean, profile: any | null) => void) => {
+    subscribe: (callback: (isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed') => void) => {
         subscribers.push(callback);
         // Immediately notify the new subscriber with the current state
-        callback(_isSignedIn, _userProfile);
+        callback(_isSignedIn, _userProfile, _initializationState);
         return () => {
             const index = subscribers.indexOf(callback);
             if (index > -1) {
@@ -173,9 +180,9 @@ export const googleApiService = {
      * Prompts the user to sign in and grant permissions.
      */
     signIn: async (): Promise<void> => {
-        await googleApiService.initialize();
-        if (!tokenClient) {
-            throw new Error("Google Token Client is not initialized.");
+        await googleApiService.initialize().catch(() => {}); // Error is handled internally, no need to throw here
+        if (_initializationState !== 'success' || !tokenClient) {
+            throw new Error("Google API Service is not initialized or failed to initialize.");
         }
         // Prompt the user to select an account and grant access.
         // The callback in `initialize` will handle the token response.
@@ -186,8 +193,7 @@ export const googleApiService = {
      * Signs the user out.
      */
     signOut: async () => {
-        await googleApiService.initialize();
-        const token = window.gapi.client.getToken();
+        const token = window.gapi?.client?.getToken();
         if (token !== null) {
             window.google.accounts.oauth2.revoke(token.access_token, () => {
                 window.gapi.client.setToken(null);
@@ -196,6 +202,10 @@ export const googleApiService = {
                 notifySubscribers();
                 console.log('User signed out.');
             });
+        } else {
+             _isSignedIn = false;
+             _userProfile = null;
+             notifySubscribers();
         }
     },
     
