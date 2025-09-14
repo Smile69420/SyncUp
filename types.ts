@@ -22,6 +22,7 @@ export interface FormField {
   type: 'text' | 'email' | 'textarea' | 'select' | 'radio' | 'checkbox';
   required: boolean;
   options?: string[]; // For select, radio
+  linkedRecordField?: keyof Omit<BookingDetails, 'id'>;
 }
 
 export interface EventType {
@@ -113,3 +114,16 @@ export interface BookingDetails {
 }
 
 export type BookingDetailsDocument = Omit<BookingDetails, 'id'>;
+
+export type MergedBooking = Booking & BookingDetails & {
+    eventTypeName: string;
+    mode: string;
+};
+
+export interface ColumnConfig {
+  key: keyof MergedBooking | string; // Use string for derived keys
+  label: string;
+  isVisible: boolean;
+}
+
+export type ColumnConfiguration = ColumnConfig[];

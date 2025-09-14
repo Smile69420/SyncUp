@@ -1,8 +1,14 @@
 
+
 // FIX: Extend the global ImportMetaEnv interface to include custom Vite environment variables.
 // This uses TypeScript's declaration merging to add types safely without conflicting with
 // base types provided by Vite, resolving the "Subsequent property declarations" error.
 declare global {
+  // FIX: Augment the ImportMeta interface to include the `env` property, which is necessary
+  // for TypeScript to recognize `import.meta.env` and provide type safety for Vite env variables.
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
   interface ImportMetaEnv {
     readonly VITE_FIREBASE_API_KEY: string;
     readonly VITE_FIREBASE_AUTH_DOMAIN: string;

@@ -1,4 +1,4 @@
-import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument } from '../types';
+import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, ColumnConfiguration } from '../types';
 import { addMinutes, format } from 'date-fns';
 import { googleApiService } from './googleApiService';
 import { db } from './firebaseService';
@@ -11,6 +11,53 @@ import {
     setDoc,
     updateDoc,
 } from 'firebase/firestore';
+
+
+// --- DEFAULT CONFIG for the Records Page columns ---
+const DEFAULT_COLUMN_CONFIG: ColumnConfiguration = [
+    { key: 'derivedDate', label: 'Date', isVisible: true },
+    { key: 'companyName', label: 'Company Name', isVisible: true },
+    { key: 'derivedWeekNo', label: 'Week No.', isVisible: true },
+    { key: 'derivedSlot', label: 'Slot', isVisible: true },
+    { key: 'derivedDay', label: 'Day', isVisible: true },
+    { key: 'consultationDoneBy', label: 'Consultation Done By', isVisible: true },
+    { key: 'mode', label: 'Mode', isVisible: true },
+    { key: 'derivedMonth', label: 'Month', isVisible: true },
+    { key: 'bookerName', label: 'Client Name', isVisible: true },
+    { key: 'designation', label: 'Designation', isVisible: true },
+    { key: 'generalizedDesignation', label: 'Generalized Designation', isVisible: true },
+    { key: 'bookerPhone', label: 'Phone Number', isVisible: true },
+    { key: 'level', label: 'Level', isVisible: false },
+    { key: 'capability', label: 'Capability', isVisible: false },
+    { key: 'feedbackSent', label: 'Feedback Sent', isVisible: true },
+    { key: 'shownInterestInMembership', label: 'Shown Interest in Membership', isVisible: false },
+    { key: 'membership', label: 'Membership', isVisible: false },
+    { key: 'membershipVerification', label: 'Membership Verification', isVisible: false },
+    { key: 'bookerEmail', label: 'Email Id', isVisible: true },
+    { key: 'state', label: 'State', isVisible: false },
+    { key: 'district', label: 'District', isVisible: false },
+    { key: 'womenEntrepreneur', label: 'Women Entrepreneur', isVisible: false },
+    { key: 'noOfEmployeesInCompany', label: 'No of Employees in Company', isVisible: false },
+    { key: 'noOfAttendants', label: 'No of Attendants', isVisible: false },
+    { key: 'sector', label: 'Sector', isVisible: true },
+    { key: 'sectorGeneralized', label: 'Sector Generalized', isVisible: false },
+    { key: 'operationsPerfomedInBrief', label: 'Operations Perfomed In Brief', isVisible: false },
+    { key: 'scale', label: 'Scale', isVisible: false },
+    { key: 'challenges', label: 'Challenges', isVisible: false },
+    { key: 'manualTasks', label: 'Manual Tasks', isVisible: false },
+    { key: 'suggestedTools', label: 'Suggested Tools', isVisible: false },
+    { key: 'toolCategories', label: 'Tool Categories', isVisible: false },
+    { key: 'aiFamiliarityPre', label: 'AI Familiarity (Pre Consultation)', isVisible: false },
+    { key: 'kpi', label: 'KPI', isVisible: false },
+    { key: 'aiFamiliarityPost', label: 'AI Familiarty Post Consultation', isVisible: false },
+    { key: 'kpiValue', label: 'KPI Value', isVisible: false },
+    { key: 'howDidTheyGetToKnow', label: 'How did they get to know about AI Consultation', isVisible: false },
+    { key: 'additionalNotes1', label: 'Column 35', isVisible: false },
+    { key: 'notesForReport', label: 'Notes for Report', isVisible: true },
+    { key: 'followUpRequestStatus', label: 'Follow Up Request Status', isVisible: false },
+    { key: 'followUpStatus', label: 'Follow Up (Done / Pending )', isVisible: true },
+    { key: 'meetingDone', label: 'Meeting Done', isVisible: true },
+];
 
 
 // --- SERVICE LOGIC using Firebase Firestore ---
@@ -148,6 +195,21 @@ export const schedulingService = {
       followUpStatus: 'Pending',
       meetingDone: false,
     };
+
+    // Sync custom form answers to specific record fields if linked
+    eventType.customFormFields.forEach(field => {
+        if (field.linkedRecordField && bookingData.customAnswers?.[field.id]) {
+            // This syncs the form answer to the booking details document
+            const value = bookingData.customAnswers[field.id];
+            // Handle boolean from checkbox
+            if (field.type === 'checkbox') {
+                 (initialDetails as any)[field.linkedRecordField] = value === 'true';
+            } else {
+                 (initialDetails as any)[field.linkedRecordField] = value;
+            }
+        }
+    });
+
     await setDoc(doc(db, 'bookingDetails', docRef.id), initialDetails);
 
     let newBooking: Booking = {
@@ -242,5 +304,31 @@ export const schedulingService = {
          // Reconstruct the full object to return, adding the new ID and link.
          return { ...dataToSave, id: newId, link: `/book/${newId}` } as EventType;
      }
-  }
+  },
+
+  /**
+   * [LIVE] Fetches the column configuration for the Records page.
+   * Returns a default configuration if none is found in Firestore.
+   */
+  getColumnConfiguration: async (): Promise<ColumnConfiguration> => {
+    const docRef = doc(db, 'appConfig', 'columnSettings');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Basic validation to ensure config is in the expected format
+        if (data && Array.isArray(data.config)) {
+             return data.config as ColumnConfiguration;
+        }
+    }
+    // If no config exists or it's malformed, return the default
+    return DEFAULT_COLUMN_CONFIG;
+  },
+
+  /**
+   * [LIVE] Saves the column configuration for the Records page to Firestore.
+   */
+  saveColumnConfiguration: async (config: ColumnConfiguration): Promise<void> => {
+    const docRef = doc(db, 'appConfig', 'columnSettings');
+    await setDoc(docRef, { config });
+  },
 };
