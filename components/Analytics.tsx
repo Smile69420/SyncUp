@@ -159,7 +159,7 @@ const Analytics: React.FC = () => {
                         <ResponsiveContainer width="100%" height="100%">
                            <PieChart>
                                 {/* FIX: The 'activeIndex' prop is valid for the recharts Pie component but may be missing from the project's TypeScript definitions. Using @ts-ignore to suppress the type error on the component's props. */}
-                                {/* @ts-ignore */}
+                                // @ts-ignore
                                 <Pie 
                                     activeIndex={pieActiveIndex}
                                     activeShape={renderActiveShape}

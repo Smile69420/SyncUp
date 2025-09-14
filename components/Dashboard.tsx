@@ -15,7 +15,7 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode }
         <div className="p-3 rounded-full bg-primary/10 text-primary mr-4">{icon}</div>
         <div>
             <p className="text-sm text-gray-500">{title}</p>
-            <p className="text-2xl font-bold">{value}</p>
+            <p className="text-2xl font-bold truncate" title={value}>{value}</p>
         </div>
     </Card>
 );
@@ -65,13 +65,23 @@ const Dashboard: React.FC = () => {
         }, {} as Record<string, number>);
         
         const busiestDay = Object.entries(bookingsByDay).sort((a, b) => b[1] - a[1])[0];
+        
+        const bookingsByEventType = bookings.reduce((acc, booking) => {
+            const eventTypeName = eventTypes.find(et => et.id === booking.eventTypeId)?.name || 'Unknown';
+            acc[eventTypeName] = (acc[eventTypeName] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+    
+        const mostBookedEvent = Object.entries(bookingsByEventType).sort((a, b) => b[1] - a[1])[0];
+
 
         return {
             upcomingBookings,
             todaysBookings,
             busiestDay: busiestDay ? { day: format(new Date(busiestDay[0]), 'MMM do'), count: busiestDay[1] } : { day: 'N/A', count: 0 },
+            mostBookedEvent: mostBookedEvent ? { name: mostBookedEvent[0], count: mostBookedEvent[1] } : { name: 'N/A', count: 0 },
         };
-    }, [bookings]);
+    }, [bookings, eventTypes]);
 
     const handleEdit = (eventType: EventType) => {
         setSelectedEventType(eventType);
@@ -111,10 +121,11 @@ const Dashboard: React.FC = () => {
             
              <section>
                 <h2 className="text-2xl font-semibold mb-4">At a Glance</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                      <StatCard title="Upcoming (Next 7 days)" value={dashboardStats.upcomingBookings.toString()} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>} />
                      <StatCard title="Today's Meetings" value={dashboardStats.todaysBookings.toString()} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>} />
                      <StatCard title="Busiest Day (Last 30d)" value={`${dashboardStats.busiestDay.day} (${dashboardStats.busiestDay.count} mtgs)`} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>} />
+                     <StatCard title="Most Booked Event" value={dashboardStats.mostBookedEvent.name} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>} />
                 </div>
             </section>
             

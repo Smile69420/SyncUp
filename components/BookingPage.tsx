@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { schedulingService } from '../services/schedulingService';
@@ -21,6 +22,9 @@ const BookingPage: React.FC = () => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
+    const [view, setView] = useState<'date' | 'form'>('date');
+    
+    // Form state
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -39,7 +43,9 @@ const BookingPage: React.FC = () => {
                 ]);
                 if (type) {
                     setEventType(type);
-                    setBookings(allBookings.filter(b => b.eventTypeId === eventTypeId).map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
+                    // BUG FIX: Use ALL bookings to determine availability, not just for this event type.
+                    // Any booking makes the user unavailable for all event types at that time.
+                    setBookings(allBookings.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
                     const initialAnswers: { [key: string]: string } = {};
                     type.customFormFields.forEach(field => {
                         initialAnswers[field.id] = field.type === 'checkbox' ? 'false' : '';
@@ -331,83 +337,98 @@ const BookingPage: React.FC = () => {
             </p>
         </div>
     );
+    
+    const DateTimeSelector = () => (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[400px]">
+            <div>
+                 <h2 className="text-xl font-semibold mb-4">Select a Date</h2>
+                 <Calendar />
+            </div>
+            <div className="relative">
+                {selectedDate && (
+                    <>
+                     <h2 className="text-xl font-semibold mb-4">{format(selectedDate, 'EEEE, LLL d')}</h2>
+                    <div className="grid grid-cols-2 gap-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
+                        {availableSlots.length > 0 ? (
+                            availableSlots.map(slot => (
+                                <Button 
+                                    key={slot.startTime.toISOString()}
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSelectedSlot(slot.startTime);
+                                        setView('form');
+                                    }}
+                                >
+                                    {format(slot.startTime, 'p')}
+                                </Button>
+                            ))
+                        ) : (
+                            <p className="col-span-2 text-center text-slate-500 mt-8">No available slots for this day.</p>
+                        )}
+                    </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+
+    const BookingForm = () => (
+        <div>
+            <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <h3 className="font-semibold text-slate-800">Selected Time:</h3>
+                {selectedSlot && <p className="text-primary font-bold text-lg">{format(selectedSlot, 'PPPP p')}</p>}
+             </div>
+             <h2 className="text-xl font-semibold">Enter Your Details</h2>
+             <div className="space-y-4 mt-4">
+                <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Name *</label>
+                    <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                    {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
+                </div>
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
+                    <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                     {formErrors.email && <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>}
+                </div>
+                <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number *</label>
+                    <input type="tel" id="phone" value={phone} onChange={e => setPhone(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                    {formErrors.phone && <p className="text-xs text-red-500 mt-1">{formErrors.phone}</p>}
+                </div>
+                {eventType.customFormFields.map(field => (
+                    <div key={field.id}>
+                        {field.type !== 'checkbox' && (
+                             <label htmlFor={field.id} className="block text-sm font-medium text-slate-700">{field.label} {field.required && '*'}</label>
+                        )}
+                       {renderFormField(field)}
+                        {formErrors[field.id] && <p className="text-xs text-red-500 mt-1">{formErrors[field.id]}</p>}
+                    </div>
+                ))}
+                <div className="flex items-center space-x-4 pt-2">
+                     <Button onClick={handleConfirmBooking} disabled={isBooking} className="w-full">
+                        {isBooking ? <Spinner size="sm" /> : 'Confirm Booking'}
+                    </Button>
+                     <Button variant="outline" onClick={() => setView('date')} className="w-full">Back</Button>
+                </div>
+             </div>
+        </div>
+    );
 
     return (
         <div className="min-h-screen bg-white md:bg-background flex justify-center items-center p-0 md:p-4">
             <div className="w-full max-w-4xl bg-card p-4 sm:p-6 md:p-8 rounded-none md:rounded-lg md:shadow-xl grid grid-cols-1 md:grid-cols-3 gap-8">
                 <LeftPanel />
                 
-                <div className="md:col-span-2">
-                    {!selectedSlot ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[400px]">
-                            <div>
-                                 <h2 className="text-xl font-semibold mb-4">Select a Date</h2>
-                                 <Calendar />
-                            </div>
-                            <div className="relative">
-                                {selectedDate && (
-                                    <>
-                                     <h2 className="text-xl font-semibold mb-4">{format(selectedDate, 'EEEE, LLL d')}</h2>
-                                    <div className="grid grid-cols-2 gap-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
-                                        {availableSlots.length > 0 ? (
-                                            availableSlots.map(slot => (
-                                                <Button 
-                                                    key={slot.startTime.toISOString()}
-                                                    variant="outline"
-                                                    onClick={() => setSelectedSlot(slot.startTime)}
-                                                >
-                                                    {format(slot.startTime, 'p')}
-                                                </Button>
-                                            ))
-                                        ) : (
-                                            <p className="col-span-2 text-center text-slate-500 mt-8">No available slots for this day.</p>
-                                        )}
-                                    </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <div>
-                            <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                                <h3 className="font-semibold text-slate-800">Selected Time:</h3>
-                                <p className="text-primary font-bold text-lg">{format(selectedSlot, 'PPPP p')}</p>
-                             </div>
-                             <h2 className="text-xl font-semibold">Enter Your Details</h2>
-                             <div className="space-y-4 mt-4">
-                                <div>
-                                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Name *</label>
-                                    <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
-                                    {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
-                                </div>
-                                <div>
-                                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
-                                    <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
-                                     {formErrors.email && <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>}
-                                </div>
-                                <div>
-                                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number *</label>
-                                    <input type="tel" id="phone" value={phone} onChange={e => setPhone(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
-                                    {formErrors.phone && <p className="text-xs text-red-500 mt-1">{formErrors.phone}</p>}
-                                </div>
-                                {eventType.customFormFields.map(field => (
-                                    <div key={field.id}>
-                                        {field.type !== 'checkbox' && (
-                                             <label htmlFor={field.id} className="block text-sm font-medium text-slate-700">{field.label} {field.required && '*'}</label>
-                                        )}
-                                       {renderFormField(field)}
-                                        {formErrors[field.id] && <p className="text-xs text-red-500 mt-1">{formErrors[field.id]}</p>}
-                                    </div>
-                                ))}
-                                <div className="flex items-center space-x-4 pt-2">
-                                     <Button onClick={handleConfirmBooking} disabled={isBooking} className="w-full">
-                                        {isBooking ? <Spinner size="sm" /> : 'Confirm Booking'}
-                                    </Button>
-                                     <Button variant="outline" onClick={() => setSelectedSlot(null)} className="w-full">Back</Button>
-                                </div>
-                             </div>
-                        </div>
-                    )}
+                <div className="md:col-span-2 relative overflow-hidden" style={{minHeight: '450px'}}>
+                    {/* Date/Time Selector View */}
+                    <div className={`w-full h-full transition-transform duration-300 ease-in-out transform ${view === 'date' ? 'translate-x-0' : '-translate-x-full'}`}>
+                       <DateTimeSelector />
+                    </div>
+
+                    {/* Form View */}
+                    <div className={`absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out transform ${view === 'form' ? 'translate-x-0' : 'translate-x-full'}`}>
+                       {selectedSlot && <BookingForm />}
+                    </div>
                 </div>
             </div>
         </div>
