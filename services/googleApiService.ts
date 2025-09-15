@@ -8,9 +8,9 @@ const CLIENT_ID = googleApiConfig.clientId;
 
 // The scopes determine which Google services the user is asked to grant permission for.
 const SCOPES = [
-  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/drive.file' // Needed to list and find spreadsheets
+  'https://www.googleapis.com/auth/drive.file'
 ].join(' ');
 
 // --- REAL GOOGLE API SERVICE ---
@@ -314,12 +314,10 @@ export const googleApiService = {
             ],
             // This is the key part that creates the Google Meet link
             'conferenceData': {
-                'createRequest': {
-                    'requestId': `syncup-${booking.id}`,
-                    'conferenceSolutionKey': {
-                        'type': 'hangoutsMeet'
+               'createRequest': {
+                'requestId': crypto.randomUUID(),
+                'conferenceSolutionKey': { 'type': 'hangoutsMeet' }
                     }
-                }
             },
         };
 
