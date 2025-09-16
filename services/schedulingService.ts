@@ -9,6 +9,7 @@ import {
     addDoc,
     setDoc,
     updateDoc,
+    deleteDoc,
 } from 'firebase/firestore';
 import { config } from '../config';
 
@@ -313,6 +314,15 @@ export const schedulingService = {
          // Reconstruct the full object to return, adding the new ID and link.
          return { ...dataToSave, id: newId, link: `/book/${newId}` } as EventType;
      }
+  },
+
+  /**
+   * [LIVE] Deletes an event type from Firestore.
+   * Note: This does not delete associated bookings.
+   */
+  deleteEventType: async (eventTypeId: string): Promise<void> => {
+    const docRef = doc(db, 'eventTypes', eventTypeId);
+    await deleteDoc(docRef);
   },
 
   /**

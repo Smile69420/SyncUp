@@ -144,6 +144,18 @@ const Dashboard: React.FC = () => {
         setSelectedBooking(booking);
         setIsDetailsModalOpen(true);
     };
+    
+    const handleDeleteEventType = async (eventTypeId: string, eventTypeName: string) => {
+        if (window.confirm(`Are you sure you want to delete the "${eventTypeName}" event type? This action cannot be undone, but existing bookings will not be affected.`)) {
+            try {
+                await schedulingService.deleteEventType(eventTypeId);
+                await fetchData(); // Refresh data to remove the deleted event type from the UI
+            } catch (error) {
+                console.error("Failed to delete event type:", error);
+                alert("Could not delete the event type. Please try again.");
+            }
+        }
+    };
 
     const handleSaveDetails = async (details: BookingDetails) => {
         try {
@@ -194,7 +206,7 @@ const Dashboard: React.FC = () => {
                         </>
                      ) : (
                          <div className="text-center py-4">
-                            <svg xmlns="http://www.w.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 mx-auto mb-2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 mx-auto mb-2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                              <p className="font-semibold text-gray-700">All caught up!</p>
                              <p className="text-sm text-gray-500">All past meetings have been updated.</p>
                          </div>
@@ -232,6 +244,7 @@ const Dashboard: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                     <ReactRouterDOM.Link to={et.link} className="text-sm font-medium text-primary hover:underline">View</ReactRouterDOM.Link>
                                     <button onClick={() => handleEditEventType(et)} className="text-sm font-medium text-gray-500 hover:text-gray-800">Edit</button>
+                                    <button onClick={() => handleDeleteEventType(et.id, et.name)} className="text-sm font-medium text-red-500 hover:text-red-700">Delete</button>
                                 </div>
                             </div>
                         </Card>
