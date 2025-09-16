@@ -63,6 +63,27 @@ export const googleApiService = {
         }
 
         _initPromise = new Promise((resolve, reject) => {
+            const TIMEOUT_DURATION = 20000; // 20 seconds
+            let timeoutId: number | null = null;
+
+            const cleanupAndReject = (error: Error) => {
+                if (timeoutId) clearTimeout(timeoutId);
+                _initializationState = 'failed';
+                _error = error;
+                notifySubscribers();
+                reject(error);
+            };
+            
+            const cleanupAndResolve = () => {
+                if (timeoutId) clearTimeout(timeoutId);
+                resolve();
+            };
+
+            timeoutId = window.setTimeout(() => {
+                cleanupAndReject(new Error("Google API services failed to load within 20 seconds. Please check your network connection and try again."));
+            }, TIMEOUT_DURATION);
+
+
             const checkGisReady = () => {
                 if (window.google && window.gapi) {
                     _initializationState = 'pending';
@@ -76,7 +97,10 @@ export const googleApiService = {
                             callback: async (tokenResponse: any) => {
                                 if (tokenResponse.error) {
                                     console.error("Token response error:", tokenResponse.error);
-                                    _error = new Error(`Google Auth Error: ${tokenResponse.error_description || tokenResponse.error}`);
+                                    // This is an auth-flow error, not an init error.
+                                    // We can notify, but shouldn't reject the init promise here.
+                                    const authError = new Error(`Google Auth Error: ${tokenResponse.error_description || tokenResponse.error}`);
+                                    _error = authError;
                                     notifySubscribers();
                                     return;
                                 }
@@ -100,25 +124,22 @@ export const googleApiService = {
                                 _error = null;
                                 notifySubscribers();
                                 console.log('Google API Service initialized successfully.');
-                                resolve();
+                                cleanupAndResolve();
                             }).catch((error: any) => {
                                 console.error("GAPI Client Init Error:", error);
                                 const errorMsg = error.details || "Failed to initialize GAPI client. Check API key and discovery docs.";
-                                _initializationState = 'failed';
-                                _error = new Error(errorMsg);
-                                notifySubscribers();
-                                reject(_error);
+                                cleanupAndReject(new Error(errorMsg));
                             });
                         });
                     } catch (error: any) {
                          console.error("Google Service Init Error:", error);
-                         _initializationState = 'failed';
-                         _error = new Error("Failed to initialize Google services. The 'google' or 'gapi' objects may not be available.");
-                         notifySubscribers();
-                         reject(_error);
+                         cleanupAndReject(new Error("Failed to initialize Google services. The 'google' or 'gapi' objects may not be available."));
                     }
                 } else {
-                    setTimeout(checkGisReady, 100); // Poll until the GSI script is loaded
+                    // Continue polling only if the timeout hasn't fired
+                     if (_initializationState !== 'failed') {
+                        setTimeout(checkGisReady, 100);
+                    }
                 }
             };
             checkGisReady();
