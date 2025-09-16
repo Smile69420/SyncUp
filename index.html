@@ -119,6 +119,58 @@
   }
 }
 </script>
+<script src="https://apis.google.com/js/api.js"></script>
+<script type="module">
+  // This script runs before the main React app to initialize GAPI
+  import { googleApiConfig } from '/config.ts';
+
+  window.gapiReadyPromise = new Promise((resolve, reject) => {
+    // This function is called once the gapi library is loaded and ready
+    const handleClientLoad = () => {
+      gapi.load('client:auth2', {
+        callback: async () => {
+          try {
+            await gapi.client.init({
+              apiKey: googleApiConfig.apiKey,
+              discoveryDocs: [
+                'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
+                'https://www.googleapis.com/discovery/v1/apis/sheets/v4/rest',
+                'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
+              ],
+            });
+            await gapi.auth2.init({
+              clientId: googleApiConfig.clientId,
+              scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
+            });
+            console.log('GAPI initialized globally before React app.');
+            resolve();
+          } catch (error) {
+            console.error('Global GAPI Init Error:', error);
+            reject(new Error(error.details || 'Failed to initialize Google API clients.'));
+          }
+        },
+        onerror: (err) => {
+          console.error('Global GAPI Load Error:', err);
+          reject(new Error('Failed to load GAPI modules.'));
+        },
+        timeout: 30000,
+        ontimeout: () => {
+          console.error('Global GAPI Load Timeout');
+          reject(new Error('GAPI module loading timed out globally after 30 seconds.'));
+        }
+      });
+    };
+    
+    // The gapi script is loaded synchronously above, so gapi should be available.
+    if (window.gapi) {
+        handleClientLoad();
+    } else {
+        // Fallback in case of unexpected async behavior
+        console.error("`gapi` object not found immediately. This should not happen.");
+        reject(new Error("Google API script did not load correctly."));
+    }
+  });
+</script>
 </head>
   <body>
     <div id="root"></div>
