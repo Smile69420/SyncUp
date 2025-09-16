@@ -159,14 +159,8 @@ const DateTimeSelector: React.FC<{
 interface BookingFormProps {
     eventType: EventType;
     selectedSlot: Date;
-    name: string;
-    onNameChange: (val: string) => void;
-    email: string;
-    onEmailChange: (val: string) => void;
-    phone: string;
-    onPhoneChange: (val: string) => void;
-    customAnswers: { [key: string]: string };
-    onCustomAnswerChange: (fieldId: string, value: string | boolean) => void;
+    formState: { name: string; email: string; phone: string; customAnswers: { [key: string]: string } };
+    onFormChange: (fieldId: string, value: string | boolean) => void;
     formErrors: { [key: string]: string };
     isBooking: boolean;
     onConfirm: () => void;
@@ -176,14 +170,8 @@ interface BookingFormProps {
 const BookingForm: React.FC<BookingFormProps> = ({
     eventType,
     selectedSlot,
-    name,
-    onNameChange,
-    email,
-    onEmailChange,
-    phone,
-    onPhoneChange,
-    customAnswers,
-    onCustomAnswerChange,
+    formState,
+    onFormChange,
     formErrors,
     isBooking,
     onConfirm,
@@ -191,12 +179,14 @@ const BookingForm: React.FC<BookingFormProps> = ({
 }) => {
     const renderFormField = (field: FormField) => {
         const commonClasses = `mt-1 block w-full px-3 py-2 bg-white border ${formErrors[field.id] ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`;
+        const ariaInvalid = !!formErrors[field.id];
+        
         switch (field.type) {
             case 'textarea':
-                return <textarea id={field.id} value={customAnswers[field.id]} onChange={e => onCustomAnswerChange(field.id, e.target.value)} rows={3} className={commonClasses} />;
+                return <textarea id={field.id} value={formState.customAnswers[field.id] || ''} onChange={e => onFormChange(field.id, e.target.value)} rows={3} className={commonClasses} aria-invalid={ariaInvalid} />;
             case 'select':
                 return (
-                    <select id={field.id} value={customAnswers[field.id]} onChange={e => onCustomAnswerChange(field.id, e.target.value)} className={commonClasses}>
+                    <select id={field.id} value={formState.customAnswers[field.id] || ''} onChange={e => onFormChange(field.id, e.target.value)} className={commonClasses} aria-invalid={ariaInvalid}>
                         <option value="">Select an option</option>
                         {field.options?.map(option => <option key={option} value={option}>{option}</option>)}
                     </select>
@@ -206,7 +196,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     <div className={`mt-2 p-3 rounded-md border bg-slate-50 ${formErrors[field.id] ? 'border-red-500' : 'border-slate-200'}`}>
                         {field.options?.map(option => (
                             <div key={option} className="flex items-center my-1">
-                                <input type="radio" id={`${field.id}-${option}`} name={field.id} value={option} checked={customAnswers[field.id] === option} onChange={e => onCustomAnswerChange(field.id, e.target.value)} className="h-4 w-4 text-primary focus:ring-primary border-slate-300"/>
+                                <input type="radio" id={`${field.id}-${option}`} name={field.id} value={option} checked={formState.customAnswers[field.id] === option} onChange={e => onFormChange(field.id, e.target.value)} className="h-4 w-4 text-primary focus:ring-primary border-slate-300"/>
                                 <label htmlFor={`${field.id}-${option}`} className="ml-2 block text-sm text-slate-900">{option}</label>
                             </div>
                         ))}
@@ -215,14 +205,14 @@ const BookingForm: React.FC<BookingFormProps> = ({
              case 'checkbox':
                 return (
                     <div className="flex items-center mt-2">
-                        <input type="checkbox" id={field.id} checked={customAnswers[field.id] === 'true'} onChange={e => onCustomAnswerChange(field.id, e.target.checked)} className={`h-4 w-4 text-primary focus:ring-primary ${formErrors[field.id] ? 'border-red-500' : 'border-slate-300'} rounded`} />
+                        <input type="checkbox" id={field.id} checked={formState.customAnswers[field.id] === 'true'} onChange={e => onFormChange(field.id, e.target.checked)} className={`h-4 w-4 text-primary focus:ring-primary ${formErrors[field.id] ? 'border-red-500' : 'border-slate-300'} rounded`} aria-invalid={ariaInvalid}/>
                         <label htmlFor={field.id} className="ml-2 block text-sm text-slate-900">{field.label} {field.required && '*'}</label>
                     </div>
                 );
             case 'text':
             case 'email':
             default:
-                return <input type={field.type} id={field.id} value={customAnswers[field.id]} onChange={e => onCustomAnswerChange(field.id, e.target.value)} className={commonClasses} />;
+                return <input type={field.type} id={field.id} value={formState.customAnswers[field.id] || ''} onChange={e => onFormChange(field.id, e.target.value)} className={commonClasses} aria-invalid={ariaInvalid}/>;
         }
     };
 
@@ -236,17 +226,17 @@ const BookingForm: React.FC<BookingFormProps> = ({
             <div className="space-y-4 mt-4">
                 <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Name *</label>
-                    <input type="text" id="name" value={name} onChange={e => onNameChange(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                    <input type="text" id="name" value={formState.name} onChange={e => onFormChange('name', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.name}/>
                     {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
                 </div>
                 <div>
                     <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
-                    <input type="email" id="email" value={email} onChange={e => onEmailChange(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                    <input type="email" id="email" value={formState.email} onChange={e => onFormChange('email', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.email}/>
                     {formErrors.email && <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>}
                 </div>
                 <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number *</label>
-                    <input type="tel" id="phone" value={phone} onChange={e => onPhoneChange(e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`}/>
+                    <input type="tel" id="phone" value={formState.phone} onChange={e => onFormChange('phone', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.phone}/>
                     {formErrors.phone && <p className="text-xs text-red-500 mt-1">{formErrors.phone}</p>}
                 </div>
                 {eventType.customFormFields.map(field => (
@@ -282,11 +272,13 @@ const BookingPage: React.FC = () => {
     const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
     const [view, setView] = useState<'date' | 'form'>('date');
     
-    // Form state
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
-    const [customAnswers, setCustomAnswers] = useState<{ [key: string]: string }>({});
+    // Unified form state
+    const [formState, setFormState] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        customAnswers: {} as { [key: string]: string },
+    });
     const [isBooking, setIsBooking] = useState(false);
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
@@ -304,11 +296,19 @@ const BookingPage: React.FC = () => {
                     // BUG FIX: Use ALL bookings to determine availability, not just for this event type.
                     // Any booking makes the user unavailable for all event types at that time.
                     setBookings(allBookings.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
-                    const initialAnswers: { [key: string]: string } = {};
+                    
+                    const initialCustomAnswers: { [key: string]: string } = {};
                     type.customFormFields.forEach(field => {
-                        initialAnswers[field.id] = field.type === 'checkbox' ? 'false' : '';
+                        initialCustomAnswers[field.id] = field.type === 'checkbox' ? 'false' : '';
                     });
-                    setCustomAnswers(initialAnswers);
+                    
+                    // Reset form state when event type loads
+                    setFormState({
+                        name: '',
+                        email: '',
+                        phone: '',
+                        customAnswers: initialCustomAnswers,
+                    });
                 }
             } catch (error) {
                 console.error("Failed to fetch booking page data:", error);
@@ -440,26 +440,43 @@ const BookingPage: React.FC = () => {
         return slots;
     }, [eventType, selectedDate, bookings]);
     
-    const handleCustomAnswerChange = (fieldId: string, value: string | boolean) => {
-        setCustomAnswers(prev => ({ ...prev, [fieldId]: String(value) }));
-        if(formErrors[fieldId]) {
-            setFormErrors(prev => { const newErrors = {...prev}; delete newErrors[fieldId]; return newErrors; })
+    const handleFormChange = (field: string, value: string | boolean) => {
+        setFormState(prev => {
+            const newFormState = { ...prev };
+            if (field === 'name' || field === 'email' || field === 'phone') {
+                newFormState[field] = value as string;
+            } else {
+                newFormState.customAnswers = {
+                    ...newFormState.customAnswers,
+                    [field]: String(value),
+                };
+            }
+            return newFormState;
+        });
+
+        if (formErrors[field]) {
+            setFormErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
         }
     };
     
     const validateForm = () => {
         const errors: { [key: string]: string } = {};
-        if (!name) errors.name = "Name is required.";
-        if (!email) errors.email = "Email is required.";
-        else if (!/\S+@\S+\.\S+/.test(email)) errors.email = "Email is invalid.";
-        if (!phone) errors.phone = "Phone number is required.";
+        if (!formState.name) errors.name = "Name is required.";
+        if (!formState.email) errors.email = "Email is required.";
+        else if (!/\S+@\S+\.\S+/.test(formState.email)) errors.email = "Email is invalid.";
+        if (!formState.phone) errors.phone = "Phone number is required.";
 
 
         eventType?.customFormFields.forEach(field => {
             if (field.required) {
-                if(field.type === 'checkbox' && customAnswers[field.id] !== 'true') {
+                 const answer = formState.customAnswers[field.id];
+                if(field.type === 'checkbox' && answer !== 'true') {
                     errors[field.id] = `${field.label} is required.`;
-                } else if (field.type !== 'checkbox' && !customAnswers[field.id]) {
+                } else if (field.type !== 'checkbox' && !answer) {
                     errors[field.id] = `${field.label} is required.`;
                 }
             }
@@ -477,10 +494,10 @@ const BookingPage: React.FC = () => {
             const newBooking = await schedulingService.createBooking({
                 eventTypeId: eventTypeId,
                 startTime: selectedSlot,
-                bookerName: name,
-                bookerEmail: email,
-                bookerPhone: phone,
-                customAnswers: customAnswers,
+                bookerName: formState.name,
+                bookerEmail: formState.email,
+                bookerPhone: formState.phone,
+                customAnswers: formState.customAnswers,
             });
             navigate('/confirmed', { state: { booking: newBooking, eventType } });
         } catch (error) {
@@ -522,14 +539,8 @@ const BookingPage: React.FC = () => {
                            <BookingForm
                                eventType={eventType}
                                selectedSlot={selectedSlot}
-                               name={name}
-                               onNameChange={setName}
-                               email={email}
-                               onEmailChange={setEmail}
-                               phone={phone}
-                               onPhoneChange={setPhone}
-                               customAnswers={customAnswers}
-                               onCustomAnswerChange={handleCustomAnswerChange}
+                               formState={formState}
+                               onFormChange={handleFormChange}
                                formErrors={formErrors}
                                isBooking={isBooking}
                                onConfirm={handleConfirmBooking}
