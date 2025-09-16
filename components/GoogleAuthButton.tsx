@@ -11,15 +11,17 @@ const GoogleAuthButton: React.FC = () => {
     const [isSignedIn, setIsSignedIn] = useState(false);
     const [userProfile, setUserProfile] = useState<any | null>(null);
     const [initState, setInitState] = useState<'pending' | 'success' | 'failed'>('pending');
+    const [error, setError] = useState<Error | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = ReactRouterDOM.useNavigate();
 
     useEffect(() => {
-        const unsubscribe = googleApiService.subscribe((signedIn, profile, init) => {
+        const unsubscribe = googleApiService.subscribe((signedIn, profile, init, err) => {
             setIsSignedIn(signedIn);
             setUserProfile(profile);
             setInitState(init);
+            setError(err);
         });
 
         // Handle clicks outside of the dropdown to close it
@@ -65,9 +67,12 @@ const GoogleAuthButton: React.FC = () => {
 
     if (initState === 'failed') {
         return (
-            <Button size="sm" onClick={handleRetry} title="Connection to Google failed. Check browser console and API configuration, then try again.">
-                Retry Connection
-            </Button>
+            <div className="flex flex-col items-end">
+                 <Button size="sm" onClick={handleRetry} title="Connection to Google failed. Check browser console and API configuration, then try again.">
+                    Retry Connection
+                </Button>
+                {error && <p className="text-xs text-red-500 mt-1 max-w-xs text-right">{error.message}</p>}
+            </div>
         );
     }
 

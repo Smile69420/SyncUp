@@ -30,10 +30,11 @@ let tokenClient: any = null;
 let _isSignedIn = false;
 let _userProfile: any = null;
 let _initializationState: 'pending' | 'success' | 'failed' = 'pending';
-const subscribers: ((isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed') => void)[] = [];
+let _error: Error | null = null;
+const subscribers: ((isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed', error: Error | null) => void)[] = [];
 
 const notifySubscribers = () => {
-    subscribers.forEach(cb => cb(_isSignedIn, _userProfile, _initializationState));
+    subscribers.forEach(cb => cb(_isSignedIn, _userProfile, _initializationState, _error));
 };
 
 const scriptPromises: Record<string, Promise<void>> = {};
@@ -88,6 +89,7 @@ export const googleApiService = {
         }
         
         _initializationState = 'pending';
+        _error = null;
         notifySubscribers();
 
         initializationPromise = (async () => {
@@ -147,11 +149,12 @@ export const googleApiService = {
                 console.log('Google API Service fully initialized.');
                 _initializationState = 'success';
                 notifySubscribers();
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Google API Service initialization failed:", error);
                 // Invalidate the promise so initialization can be retried on a subsequent call.
                 initializationPromise = null;
                 _initializationState = 'failed';
+                _error = error;
                 notifySubscribers();
                 // Re-throw to allow callers to handle the failure.
                 throw error;
@@ -166,10 +169,10 @@ export const googleApiService = {
      * @param callback - The function to call when the auth state changes.
      * @returns An unsubscribe function.
      */
-    subscribe: (callback: (isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed') => void) => {
+    subscribe: (callback: (isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed', error: Error | null) => void) => {
         subscribers.push(callback);
         // Immediately notify the new subscriber with the current state
-        callback(_isSignedIn, _userProfile, _initializationState);
+        callback(_isSignedIn, _userProfile, _initializationState, _error);
         return () => {
             const index = subscribers.indexOf(callback);
             if (index > -1) {
