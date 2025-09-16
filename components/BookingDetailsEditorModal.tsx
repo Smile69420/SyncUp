@@ -73,10 +73,6 @@ const BookingDetailsEditorModal: React.FC<EditorProps> = ({ booking, onClose, on
                             <label className="block text-sm font-medium text-slate-700">Consultation Done By</label>
                             <input type="text" value={details.consultationDoneBy || ''} onChange={e => handleChange('consultationDoneBy', e.target.value)} className={inputClasses} />
                         </div>
-                        <div className="flex items-center pt-6">
-                            <input type="checkbox" id="meetingDone" checked={!!details.meetingDone} onChange={e => handleCheckboxChange('meetingDone', e.target.checked)} className="h-4 w-4 text-primary rounded border-slate-300" />
-                            <label htmlFor="meetingDone" className="ml-2 text-sm font-medium text-slate-700">Meeting Done</label>
-                        </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700">No of Employees</label>
                             <input type="text" value={details.noOfEmployeesInCompany || ''} onChange={e => handleChange('noOfEmployeesInCompany', e.target.value)} className={inputClasses} />
@@ -140,7 +136,7 @@ const BookingDetailsEditorModal: React.FC<EditorProps> = ({ booking, onClose, on
 
                 {/* Section 5: Follow-up & Status */}
                 <fieldset className="p-4 border rounded-lg">
-                    <legend className="px-2 font-semibold text-slate-700">Follow-up & Status</legend>
+                    <legend className="px-2 font-semibold text-slate-700">Follow-up & Membership</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div>
                             <label className="block text-sm font-medium text-slate-700">Feedback Sent</label>
@@ -157,10 +153,6 @@ const BookingDetailsEditorModal: React.FC<EditorProps> = ({ booking, onClose, on
                                 <option value="Done">Done</option>
                             </Select>
                         </div>
-                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-slate-700">Notes for Report</label>
-                            <textarea value={details.notesForReport || ''} onChange={e => handleChange('notesForReport', e.target.value)} rows={4} className={inputClasses} />
-                        </div>
                         <div className="flex items-center">
                             <input type="checkbox" id="interest" checked={!!details.shownInterestInMembership} onChange={e => handleCheckboxChange('shownInterestInMembership', e.target.checked)} className="h-4 w-4 text-primary rounded border-slate-300" />
                             <label htmlFor="interest" className="ml-2 text-sm font-medium text-slate-700">Shown Interest in Membership</label>
@@ -168,6 +160,30 @@ const BookingDetailsEditorModal: React.FC<EditorProps> = ({ booking, onClose, on
                          <div className="flex items-center">
                             <input type="checkbox" id="membership" checked={!!details.membership} onChange={e => handleCheckboxChange('membership', e.target.checked)} className="h-4 w-4 text-primary rounded border-slate-300" />
                             <label htmlFor="membership" className="ml-2 text-sm font-medium text-slate-700">Membership</label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                {/* Section 6: Post-Meeting Details */}
+                 <fieldset className="p-4 border rounded-lg bg-slate-50">
+                    <legend className="px-2 font-semibold text-slate-700">Post-Meeting Details</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700">Meeting Status</label>
+                            <Select value={details.meetingStatus || 'Scheduled'} onChange={e => handleChange('meetingStatus', e.target.value)}>
+                                <option value="Scheduled">Scheduled</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                                <option value="No Show">No Show</option>
+                            </Select>
+                        </div>
+                         <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-slate-700">Fireflies Recording Link</label>
+                            <input type="url" value={details.firefliesLink || ''} onChange={e => handleChange('firefliesLink', e.target.value)} className={inputClasses} placeholder="https://app.fireflies.ai/..."/>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-slate-700">Notes for Report</label>
+                            <textarea value={details.notesForReport || ''} onChange={e => handleChange('notesForReport', e.target.value)} rows={4} className={inputClasses} />
                         </div>
                     </div>
                 </fieldset>

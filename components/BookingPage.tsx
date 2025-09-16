@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+// FIX: Changed to namespace import to fix module resolution issues.
+import * as ReactRouterDOM from 'react-router-dom';
 import { schedulingService } from '../services/schedulingService';
 import type { EventType, Booking, TimeSlot, FormField } from '../types';
 import Spinner from './ui/Spinner';
@@ -12,8 +14,8 @@ import {
 import { enUS } from 'date-fns/locale';
 
 const BookingPage: React.FC = () => {
-    const { eventTypeId } = useParams<{ eventTypeId: string }>();
-    const navigate = useNavigate();
+    const { eventTypeId } = ReactRouterDOM.useParams<{ eventTypeId: string }>();
+    const navigate = ReactRouterDOM.useNavigate();
 
     const [eventType, setEventType] = useState<EventType | null>(null);
     const [bookings, setBookings] = useState<Booking[]>([]);

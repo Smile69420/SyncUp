@@ -1,11 +1,13 @@
+
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+// FIX: Changed to namespace import to fix module resolution issues.
+import * as ReactRouterDOM from 'react-router-dom';
 import type { Booking, EventType } from '../types';
 import Card from './ui/Card';
 import { format } from 'date-fns';
 
 const ConfirmationPage: React.FC = () => {
-    const location = useLocation();
+    const location = ReactRouterDOM.useLocation();
     const { booking, eventType } = (location.state as { booking: Booking, eventType: EventType }) || {};
 
     if (!booking || !eventType) {
@@ -14,9 +16,9 @@ const ConfirmationPage: React.FC = () => {
                 <Card className="p-8">
                     <h1 className="text-2xl font-bold">Something went wrong</h1>
                     <p className="mt-4 text-slate-600">We couldn't find your booking details. Please check your email for a confirmation.</p>
-                    <Link to="/" className="mt-6 inline-block bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary/90">
+                    <ReactRouterDOM.Link to="/" className="mt-6 inline-block bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary/90">
                         Go to Dashboard
-                    </Link>
+                    </ReactRouterDOM.Link>
                 </Card>
             </div>
         );
@@ -93,9 +95,9 @@ const ConfirmationPage: React.FC = () => {
                         </>
                     )}
                 </div>
-                 <Link to="/" className="mt-8 block text-center text-sm text-primary hover:underline font-medium">
+                 <ReactRouterDOM.Link to="/" className="mt-8 block text-center text-sm text-primary hover:underline font-medium">
                     Schedule another event
-                </Link>
+                </ReactRouterDOM.Link>
             </Card>
         </div>
     );

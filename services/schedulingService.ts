@@ -22,6 +22,7 @@ const DEFAULT_COLUMN_CONFIG: ColumnConfiguration = [
     { key: 'derivedDay', label: 'Day', isVisible: true },
     { key: 'consultationDoneBy', label: 'Consultation Done By', isVisible: true },
     { key: 'mode', label: 'Mode', isVisible: true },
+    { key: 'meetingStatus', label: 'Meeting Status', isVisible: true },
     { key: 'derivedMonth', label: 'Month', isVisible: true },
     { key: 'bookerName', label: 'Client Name', isVisible: true },
     { key: 'designation', label: 'Designation', isVisible: true },
@@ -56,7 +57,7 @@ const DEFAULT_COLUMN_CONFIG: ColumnConfiguration = [
     { key: 'notesForReport', label: 'Notes for Report', isVisible: true },
     { key: 'followUpRequestStatus', label: 'Follow Up Request Status', isVisible: false },
     { key: 'followUpStatus', label: 'Follow Up (Done / Pending )', isVisible: true },
-    { key: 'meetingDone', label: 'Meeting Done', isVisible: true },
+    { key: 'firefliesLink', label: 'Recording Link', isVisible: false },
 ];
 
 
@@ -193,7 +194,8 @@ export const schedulingService = {
       notesForReport: '',
       followUpRequestStatus: 'Not Requested',
       followUpStatus: 'Pending',
-      meetingDone: false,
+      meetingStatus: 'Scheduled',
+      firefliesLink: '',
     };
 
     // Sync custom form answers to specific record fields if linked

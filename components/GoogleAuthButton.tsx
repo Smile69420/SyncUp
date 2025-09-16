@@ -1,6 +1,8 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+// FIX: Changed to namespace import to fix module resolution issues.
+import * as ReactRouterDOM from 'react-router-dom';
 import { googleApiService } from '../services/googleApiService';
 import Button from './ui/Button';
 import Spinner from './ui/Spinner';
@@ -11,7 +13,7 @@ const GoogleAuthButton: React.FC = () => {
     const [initState, setInitState] = useState<'pending' | 'success' | 'failed'>('pending');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const navigate = useNavigate();
+    const navigate = ReactRouterDOM.useNavigate();
 
     useEffect(() => {
         const unsubscribe = googleApiService.subscribe((signedIn, profile, init) => {
@@ -44,6 +46,13 @@ const GoogleAuthButton: React.FC = () => {
         sessionStorage.removeItem('isAuthenticated');
         navigate('/login');
     };
+    
+    const handleRetry = () => {
+        // The service resets its own state, so we just need to call initialize again.
+        // The subscribe callback will update our component's state automatically.
+        googleApiService.initialize();
+    };
+
 
     if (initState === 'pending') {
         return (
@@ -56,8 +65,8 @@ const GoogleAuthButton: React.FC = () => {
 
     if (initState === 'failed') {
         return (
-            <Button size="sm" disabled title="Connection to Google failed. Check browser console and API configuration.">
-                Connection Failed
+            <Button size="sm" onClick={handleRetry} title="Connection to Google failed. Check browser console and API configuration, then try again.">
+                Retry Connection
             </Button>
         );
     }

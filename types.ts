@@ -110,7 +110,8 @@ export interface BookingDetails {
     notesForReport?: string;
     followUpRequestStatus?: 'Requested' | 'Not Requested' | 'Completed';
     followUpStatus?: 'Done' | 'Pending';
-    meetingDone?: boolean;
+    meetingStatus?: 'Scheduled' | 'Completed' | 'Cancelled' | 'No Show';
+    firefliesLink?: string;
 }
 
 export type BookingDetailsDocument = Omit<BookingDetails, 'id'>;

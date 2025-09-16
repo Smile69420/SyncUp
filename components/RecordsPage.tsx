@@ -8,6 +8,18 @@ import BookingDetailsEditorModal from './BookingDetailsEditorModal';
 import ColumnManagerModal from './ColumnManagerModal';
 import { format, getWeek } from 'date-fns';
 
+const StatusBadge: React.FC<{ status?: MergedBooking['meetingStatus']}> = ({ status }) => {
+    const statusStyles = {
+        Scheduled: 'bg-blue-100 text-blue-800',
+        Completed: 'bg-emerald-100 text-emerald-800',
+        Cancelled: 'bg-red-100 text-red-800',
+        'No Show': 'bg-amber-100 text-amber-800',
+    };
+    const style = statusStyles[status || 'Scheduled'] || 'bg-slate-100 text-slate-800';
+    return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${style}`}>{status || 'Scheduled'}</span>
+};
+
+
 const RecordsPage: React.FC = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [eventTypes, setEventTypes] = useState<EventType[]>([]);
@@ -164,7 +176,15 @@ const RecordsPage: React.FC = () => {
                                         <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>Edit Details</Button>
                                     </td>
                                     {visibleColumns.map(col => (
-                                        <td key={col.key as string} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{getDisplayValue(item, col.key as string)}</td>
+                                        <td key={col.key as string} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
+                                            {col.key === 'meetingStatus' ? (
+                                                <StatusBadge status={item.meetingStatus} />
+                                            ) : col.key === 'firefliesLink' && item.firefliesLink ? (
+                                                <a href={item.firefliesLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View Recording</a>
+                                            ) : (
+                                                getDisplayValue(item, col.key as string)
+                                            )}
+                                        </td>
                                     ))}
                                 </tr>
                             ))}

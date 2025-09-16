@@ -1,14 +1,17 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+// FIX: Changed to namespace import to fix module resolution issues.
+import * as ReactRouterDOM from 'react-router-dom';
 import CalendarView from './CalendarView';
 import EventTypeEditor from './EventTypeEditor';
 import { schedulingService } from '../services/schedulingService';
-import type { EventType, Booking } from '../types';
+import type { EventType, Booking, BookingDetails, MergedBooking } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
 import Button from './ui/Button';
-import { format, isToday, isWithinInterval, addDays, startOfToday, subDays } from 'date-fns';
+import { format, isToday, isWithinInterval, addDays, startOfToday, subDays, isPast } from 'date-fns';
+import BookingDetailsEditorModal from './BookingDetailsEditorModal';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode }> = ({ title, value, icon }) => (
     <Card className="flex items-center p-4">
@@ -24,21 +27,26 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode }
 const Dashboard: React.FC = () => {
     const [eventTypes, setEventTypes] = useState<EventType[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [bookingDetails, setBookingDetails] = useState<BookingDetails[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
+    const [selectedBooking, setSelectedBooking] = useState<MergedBooking | null>(null);
     const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [types, books] = await Promise.all([
+            const [types, books, details] = await Promise.all([
                 schedulingService.getEventTypes(),
                 schedulingService.getBookings(),
+                schedulingService.getBookingDetails(),
             ]);
             setEventTypes(types);
             setBookings(books.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
+            setBookingDetails(details);
         } catch (error) {
             console.error("Failed to fetch data:", error);
         } finally {
@@ -49,6 +57,22 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    const mergedData = useMemo((): MergedBooking[] => {
+        const eventTypeMap = new Map(eventTypes.map(et => [et.id, et]));
+        const bookingDetailsMap = new Map(bookingDetails.map(bd => [bd.id, bd]));
+
+        return bookings.map(booking => {
+            const details = bookingDetailsMap.get(booking.id) || { id: booking.id };
+            const eventType = eventTypeMap.get(booking.eventTypeId);
+            return {
+                ...booking,
+                ...details,
+                eventTypeName: eventType?.name || 'Unknown',
+                mode: eventType?.mode || 'N/A',
+            };
+        });
+    }, [bookings, eventTypes, bookingDetails]);
     
     const dashboardStats = useMemo(() => {
         const today = startOfToday();
@@ -83,17 +107,25 @@ const Dashboard: React.FC = () => {
         };
     }, [bookings, eventTypes]);
 
-    const handleEdit = (eventType: EventType) => {
+    const pendingUpdates = useMemo(() => {
+        const now = new Date();
+        return mergedData
+            .filter(b => isPast(b.endTime) && b.meetingStatus === 'Scheduled')
+            .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+    }, [mergedData]);
+
+
+    const handleEditEventType = (eventType: EventType) => {
         setSelectedEventType(eventType);
         setIsEditorOpen(true);
     };
 
-    const handleAddNew = () => {
+    const handleAddNewEventType = () => {
         setSelectedEventType(null);
         setIsEditorOpen(true);
     };
 
-    const handleSave = async (eventType: Omit<EventType, 'id' | 'link'> & { id?: string }) => {
+    const handleSaveEventType = async (eventType: Omit<EventType, 'id' | 'link'> & { id?: string }) => {
         await schedulingService.saveEventType(eventType);
         setIsEditorOpen(false);
         setSelectedEventType(null);
@@ -108,6 +140,25 @@ const Dashboard: React.FC = () => {
         });
     };
 
+    const handleEditDetails = (booking: MergedBooking) => {
+        setSelectedBooking(booking);
+        setIsDetailsModalOpen(true);
+    };
+
+    const handleSaveDetails = async (details: BookingDetails) => {
+        try {
+            const { id, ...dataToSave } = details;
+            await schedulingService.updateBookingDetails(id, dataToSave);
+            setIsDetailsModalOpen(false);
+            setSelectedBooking(null);
+            await fetchData(); // Refresh data
+        } catch(error) {
+            console.error("Failed to save details:", error);
+            alert("Could not save changes. Please try again.");
+        }
+    };
+
+
     if (loading) {
         return <div className="flex justify-center items-center h-96"><Spinner /></div>;
     }
@@ -116,8 +167,40 @@ const Dashboard: React.FC = () => {
         <div className="space-y-8">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Dashboard</h1>
-                <Button onClick={handleAddNew}>+ Create Event Type</Button>
+                <Button onClick={handleAddNewEventType}>+ Create Event Type</Button>
             </div>
+
+            <section>
+                 <h2 className="text-2xl font-semibold mb-4">Action Center</h2>
+                 <Card>
+                    <div className="flex items-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 mr-3"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                        <h3 className="font-bold text-lg text-amber-700">Pending Updates ({pendingUpdates.length})</h3>
+                    </div>
+                     {pendingUpdates.length > 0 ? (
+                        <>
+                            <p className="text-sm text-gray-500 mb-4">These past meetings need their status and details updated.</p>
+                            <ul className="divide-y divide-gray-200 max-h-60 overflow-y-auto custom-scrollbar">
+                                {pendingUpdates.map(booking => (
+                                    <li key={booking.id} className="py-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-gray-800">{booking.eventTypeName} with {booking.bookerName}</p>
+                                            <p className="text-sm text-gray-500">{format(booking.startTime, 'PP p')}</p>
+                                        </div>
+                                        <Button size="sm" variant="outline" onClick={() => handleEditDetails(booking)}>Update Status</Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
+                     ) : (
+                         <div className="text-center py-4">
+                            <svg xmlns="http://www.w.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 mx-auto mb-2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                             <p className="font-semibold text-gray-700">All caught up!</p>
+                             <p className="text-sm text-gray-500">All past meetings have been updated.</p>
+                         </div>
+                     )}
+                 </Card>
+            </section>
             
              <section>
                 <h2 className="text-2xl font-semibold mb-4">At a Glance</h2>
@@ -147,8 +230,8 @@ const Dashboard: React.FC = () => {
                                      {copiedLinkId === et.id ? 'Copied!' : 'Copy Link'}
                                 </Button>
                                 <div className="flex items-center gap-2">
-                                    <Link to={et.link} className="text-sm font-medium text-primary hover:underline">View</Link>
-                                    <button onClick={() => handleEdit(et)} className="text-sm font-medium text-gray-500 hover:text-gray-800">Edit</button>
+                                    <ReactRouterDOM.Link to={et.link} className="text-sm font-medium text-primary hover:underline">View</ReactRouterDOM.Link>
+                                    <button onClick={() => handleEditEventType(et)} className="text-sm font-medium text-gray-500 hover:text-gray-800">Edit</button>
                                 </div>
                             </div>
                         </Card>
@@ -159,7 +242,7 @@ const Dashboard: React.FC = () => {
             <section>
                 <h2 className="text-2xl font-semibold mb-4">Your Schedule</h2>
                 <Card>
-                    <CalendarView bookings={bookings} eventTypes={eventTypes} />
+                    <CalendarView bookings={mergedData} eventTypes={eventTypes} />
                 </Card>
             </section>
 
@@ -167,7 +250,15 @@ const Dashboard: React.FC = () => {
                 <EventTypeEditor 
                     eventType={selectedEventType}
                     onClose={() => setIsEditorOpen(false)}
-                    onSave={handleSave}
+                    onSave={handleSaveEventType}
+                />
+            )}
+
+            {isDetailsModalOpen && selectedBooking && (
+                <BookingDetailsEditorModal 
+                    booking={selectedBooking}
+                    onClose={() => setIsDetailsModalOpen(false)}
+                    onSave={handleSaveDetails}
                 />
             )}
         </div>

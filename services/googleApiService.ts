@@ -8,9 +8,9 @@ const CLIENT_ID = googleApiConfig.clientId;
 
 // The scopes determine which Google services the user is asked to grant permission for.
 const SCOPES = [
-  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/drive.file'
+  'https://www.googleapis.com/auth/drive.file' // Needed to list and find spreadsheets
 ].join(' ');
 
 // --- REAL GOOGLE API SERVICE ---
@@ -102,8 +102,8 @@ export const googleApiService = {
                     window.gapi.load('client:oauth2', {
                         callback: resolve,
                         onerror: (err: any) => reject(new Error(`Failed to load GAPI modules: ${JSON.stringify(err)}`)),
-                        timeout: 30000,
-                        ontimeout: () => reject(new Error('GAPI module loading timed out after 30 seconds.')),
+                        timeout: 60000,
+                        ontimeout: () => reject(new Error('GAPI module loading timed out after 60 seconds.')),
                     });
                 });
 
@@ -314,10 +314,12 @@ export const googleApiService = {
             ],
             // This is the key part that creates the Google Meet link
             'conferenceData': {
-               'createRequest': {
-                'requestId': crypto.randomUUID(),
-                'conferenceSolutionKey': { 'type': 'hangoutsMeet' }
+                'createRequest': {
+                    'requestId': `syncup-${booking.id}`,
+                    'conferenceSolutionKey': {
+                        'type': 'hangoutsMeet'
                     }
+                }
             },
         };
 

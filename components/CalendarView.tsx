@@ -1,15 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import type { Booking, EventType } from '../types';
+import type { Booking, EventType, MergedBooking } from '../types';
 import {
     format, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isSameDay, startOfDay, addHours,
     startOfMonth, endOfMonth, isSameMonth, isToday, addMonths, subMonths, addWeeks, subWeeks, getDay,
-    getHours, getMinutes
+    getHours, getMinutes, isPast
 } from 'date-fns';
 import Button from './ui/Button';
 import BookingPreviewModal from './BookingPreviewModal';
 
 interface CalendarViewProps {
-    bookings: Booking[];
+    bookings: MergedBooking[];
     eventTypes: EventType[];
 }
 
@@ -162,11 +162,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, eventTypes }) => 
 };
 
 // --- HELPER FUNCTIONS FOR RENDERING ---
-const getOverlappingGroups = (dayBookings: Booking[]) => {
+const getOverlappingGroups = (dayBookings: MergedBooking[]) => {
     if (dayBookings.length === 0) return [];
     const sortedBookings = [...dayBookings].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-    const groups: Booking[][] = [];
-    let currentGroup: Booking[] = [sortedBookings[0]];
+    const groups: MergedBooking[][] = [];
+    let currentGroup: MergedBooking[] = [sortedBookings[0]];
 
     for (let i = 1; i < sortedBookings.length; i++) {
         const booking = sortedBookings[i];
@@ -182,7 +182,7 @@ const getOverlappingGroups = (dayBookings: Booking[]) => {
     return groups;
 };
 
-const renderBookingsForDayColumn = (day: Date, bookings: Booking[], onEventClick: (b: Booking) => void, eventTypeMap: Record<string, EventType>) => {
+const renderBookingsForDayColumn = (day: Date, bookings: MergedBooking[], onEventClick: (b: MergedBooking) => void, eventTypeMap: Record<string, EventType>) => {
     const dayBookings = bookings.filter(b => isSameDay(b.startTime, day));
     const overlappingGroups = getOverlappingGroups(dayBookings);
 
@@ -207,11 +207,16 @@ const renderBookingsForDayColumn = (day: Date, bookings: Booking[], onEventClick
         const top = ((startHour - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX) + (startMinute * (HOUR_HEIGHT_PX / 60));
         const durationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
         const height = durationMinutes * (HOUR_HEIGHT_PX / 60);
+        
+        const isPastEvent = isPast(booking.endTime);
+        const isCompleted = booking.meetingStatus === 'Completed';
+        const eventClasses = `absolute rounded-lg p-2 text-white text-xs overflow-hidden cursor-pointer hover:opacity-80 transition-opacity z-10 border ${isPastEvent && !isCompleted ? 'opacity-60' : ''}`;
+
 
         return (
             <div
                 key={booking.id}
-                className="absolute rounded-lg p-2 text-white text-xs overflow-hidden cursor-pointer hover:opacity-80 transition-opacity z-10 border"
+                className={eventClasses}
                 style={{
                     backgroundColor: eventType.color,
                     borderColor: `${eventType.color}dd`,
@@ -223,7 +228,10 @@ const renderBookingsForDayColumn = (day: Date, bookings: Booking[], onEventClick
                 }}
                 onClick={() => onEventClick(booking)}
             >
-                <p className="font-bold whitespace-nowrap overflow-hidden text-ellipsis">{booking.bookerName}</p>
+                <p className="font-bold whitespace-nowrap overflow-hidden text-ellipsis">
+                    {isCompleted && '✅ '}
+                    {booking.bookerName}
+                </p>
                 <p className="text-xs opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{eventType.name}</p>
             </div>
         );
@@ -258,7 +266,7 @@ const TimeLabels: React.FC = () => {
 };
 
 
-const WeekViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEventClick: (b: Booking) => void, eventTypeMap: Record<string, EventType> }> = 
+const WeekViewComponent: React.FC<{ currentDate: Date, bookings: MergedBooking[], onEventClick: (b: MergedBooking) => void, eventTypeMap: Record<string, EventType> }> = 
 ({ currentDate, bookings, onEventClick, eventTypeMap }) => {
     const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
     const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
@@ -296,7 +304,7 @@ const WeekViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEv
     );
 };
 
-const DayViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEventClick: (b: Booking) => void, eventTypeMap: Record<string, EventType> }> = 
+const DayViewComponent: React.FC<{ currentDate: Date, bookings: MergedBooking[], onEventClick: (b: MergedBooking) => void, eventTypeMap: Record<string, EventType> }> = 
 ({ currentDate, bookings, onEventClick, eventTypeMap }) => {
     const totalGridHeight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
     
@@ -317,7 +325,7 @@ const DayViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEve
     );
 };
 
-const MonthViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onEventClick: (b: Booking) => void, eventTypeMap: Record<string, EventType> }> = 
+const MonthViewComponent: React.FC<{ currentDate: Date, bookings: MergedBooking[], onEventClick: (b: MergedBooking) => void, eventTypeMap: Record<string, EventType> }> = 
 ({ currentDate, bookings, onEventClick, eventTypeMap }) => {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(monthStart);
@@ -347,15 +355,20 @@ const MonthViewComponent: React.FC<{ currentDate: Date, bookings: Booking[], onE
                             <div className="flex-grow overflow-y-auto custom-scrollbar">
                                 {dayBookings.map(booking => {
                                     const eventType = eventTypeMap[booking.eventTypeId];
+                                    const isCompleted = booking.meetingStatus === 'Completed';
+                                    const isPastEvent = isPast(booking.endTime);
                                     return (
                                         <button 
                                             key={booking.id}
                                             onClick={() => onEventClick(booking)}
-                                            className="w-full text-left text-xs p-1 rounded mb-1 text-white hover:opacity-80"
+                                            className={`w-full text-left text-xs p-1 rounded mb-1 text-white hover:opacity-80 ${isPastEvent && !isCompleted ? 'opacity-60' : ''}`}
                                             style={{ backgroundColor: eventType?.color || '#64748b' }}
                                         >
                                             <span className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis block">{format(booking.startTime, 'p')}</span>
-                                            <span className="whitespace-nowrap overflow-hidden text-ellipsis block">{booking.bookerName}</span>
+                                            <span className="whitespace-nowrap overflow-hidden text-ellipsis block">
+                                                {isCompleted && '✅ '}
+                                                {booking.bookerName}
+                                            </span>
                                         </button>
                                     );
                                 })}

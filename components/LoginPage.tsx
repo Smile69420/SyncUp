@@ -1,6 +1,8 @@
 
+
 import React, { useState, FormEvent, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// FIX: Changed to namespace import to fix module resolution issues.
+import * as ReactRouterDOM from 'react-router-dom';
 import Button from './ui/Button';
 import Spinner from './ui/Spinner';
 
@@ -36,7 +38,7 @@ const LoginPage: React.FC = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const navigate = useNavigate();
+    const navigate = ReactRouterDOM.useNavigate();
     const inputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
