@@ -15,7 +15,7 @@ const SCOPES = [
 
 // --- REAL GOOGLE API SERVICE ---
 // This service interacts with the live Google APIs.
-// It now loads its own script dependencies dynamically.
+// It relies on script tags being present in index.html
 
 declare global {
   interface Window {
@@ -37,47 +37,6 @@ const notifySubscribers = () => {
     subscribers.forEach(cb => cb(_isSignedIn, _userProfile, _initializationState, _error));
 };
 
-const scriptPromises: Record<string, Promise<void>> = {};
-
-/**
- * Dynamically loads a script tag into the document head and returns a promise
- * that resolves when the script is loaded. This is idempotent and handles race conditions.
- * @param id - A unique ID for the script tag.
- * @param src - The source URL of the script to load.
- */
-const loadScript = (id: string, src: string): Promise<void> => {
-    // If a promise for this script already exists, return it to avoid duplicate loading.
-    if (scriptPromises[id]) {
-        return scriptPromises[id];
-    }
-    
-    // Create a new promise for this script and store it in the cache.
-    scriptPromises[id] = new Promise((resolve, reject) => {
-        const existingScript = document.getElementById(id);
-        if (existingScript) {
-            // Script tag already exists, assume it's loaded or will load.
-            // This can happen with fast re-renders or if loaded by other means.
-             return resolve();
-        }
-
-        const script = document.createElement('script');
-        script.id = id;
-        script.src = src;
-        script.async = true;
-        script.defer = true;
-        script.onload = () => resolve();
-        script.onerror = () => {
-            // On failure, remove the promise from cache to allow future retries.
-            delete scriptPromises[id];
-            reject(new Error(`Failed to load script: ${src}`));
-        };
-        document.head.appendChild(script);
-    });
-    
-    return scriptPromises[id];
-};
-
-
 export const googleApiService = {
     /**
      * Loads the GAPI and GIS clients and initializes them.
@@ -94,22 +53,38 @@ export const googleApiService = {
 
         initializationPromise = (async () => {
             try {
-                // Dynamically load the Google API scripts for a more robust initialization process.
-                await loadScript('gapi-script', 'https://apis.google.com/js/api.js');
-                await loadScript('gis-script', 'https://accounts.google.com/gsi/client');
+                // 1. Wait for the scripts loaded via index.html to be ready by polling for the global objects.
+                await new Promise<void>((resolve, reject) => {
+                    const timeout = 30000; // 30 seconds
+                    const interval = 100; // check every 100ms
+                    let elapsedTime = 0;
 
-                // Once scripts are loaded, use their functions to initialize the clients.
-                // gapi.load() is used to load specific client modules (e.g., 'client', 'oauth2').
+                    const checkGlobals = () => {
+                        // `gapi.load` is the first function we need from the GAPI script.
+                        // `google.accounts` is the object we need from the GIS script.
+                        if (window.gapi?.load && window.google?.accounts) {
+                            resolve();
+                        } else if (elapsedTime < timeout) {
+                            elapsedTime += interval;
+                            setTimeout(checkGlobals, interval);
+                        } else {
+                            reject(new Error('Google API scripts failed to load after 30 seconds. Check network or ad-blockers.'));
+                        }
+                    };
+                    checkGlobals();
+                });
+                
+                // 2. Load the specific GAPI modules (client:oauth2) required for our operations.
                 await new Promise<void>((resolve, reject) => {
                     window.gapi.load('client:oauth2', {
                         callback: resolve,
                         onerror: (err: any) => reject(new Error(`Failed to load GAPI modules: ${JSON.stringify(err)}`)),
-                        timeout: 60000,
-                        ontimeout: () => reject(new Error('GAPI module loading timed out after 60 seconds.')),
+                        timeout: 30000, // Reduced as requested.
+                        ontimeout: () => reject(new Error('GAPI module loading timed out after 30 seconds.')),
                     });
                 });
 
-                // Initialize the GAPI client with API key and discovery docs.
+                // 3. Initialize the GAPI client with API key and discovery docs.
                 await window.gapi.client.init({
                     apiKey: API_KEY,
                     discoveryDocs: [
@@ -120,14 +95,13 @@ export const googleApiService = {
                 });
                 console.log('GAPI client initialized.');
 
-                // Initialize the GIS client for OAuth2 token management.
+                // 4. Initialize the GIS client for OAuth2 token management.
                 tokenClient = window.google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID,
                     scope: SCOPES,
                     callback: async (tokenResponse: any) => {
                         if (tokenResponse.error) {
                             console.error('OAuth Error:', tokenResponse.error);
-                            // Potentially revoke access and sign out
                             _isSignedIn = false;
                             _userProfile = null;
                             notifySubscribers();
