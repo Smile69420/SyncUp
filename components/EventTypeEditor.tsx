@@ -4,11 +4,13 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { format } from 'date-fns';
 import Select from './ui/Select';
+import { schedulingService } from '../services/schedulingService';
 
 interface EventTypeEditorProps {
     eventType: EventType | null;
     onClose: () => void;
     onSave: (data: Omit<EventType, 'id' | 'link'> & { id?: string }) => void;
+    onDelete?: () => void;
 }
 
 const weekDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -169,7 +171,7 @@ const processImage = (file: File): Promise<string> => {
 };
 
 
-const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, onSave }) => {
+const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, onSave, onDelete }) => {
     const [name, setName] = useState('');
     const [duration, setDuration] = useState(30);
     const [description, setDescription] = useState('');
@@ -389,6 +391,20 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
         onSave(dataToSave);
     };
 
+    const handleDelete = async () => {
+        if (!eventType || !eventType.id || !onDelete) return;
+
+        if (window.confirm(`Are you sure you want to delete the "${eventType.name}" event type? This action cannot be undone, but existing bookings will be preserved.`)) {
+            try {
+                await schedulingService.deleteEventType(eventType.id);
+                onDelete(); // This will close the modal and refresh the dashboard
+            } catch (error) {
+                console.error("Failed to delete event type:", error);
+                alert("Could not delete the event type. Please try again.");
+            }
+        }
+    };
+
     const TabButton = ({ tab, children }: { tab: typeof activeTab, children: React.ReactNode }) => (
          <button 
             onClick={() => setActiveTab(tab)}
@@ -545,6 +561,19 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                      </div>
                                  </div>
                             </div>
+
+                            {eventType && (
+                                <div className="mt-8 pt-6 border-t border-red-200">
+                                    <h3 className="text-lg font-semibold text-red-700">Danger Zone</h3>
+                                    <p className="text-sm text-slate-600 mt-1 mb-4">
+                                        Deleting this event type cannot be undone. All existing bookings for this event type will be preserved, but you will no longer be able to accept new bookings for it.
+                                    </p>
+                                    <Button variant="outline" onClick={handleDelete} className="!border-red-500 !text-red-600 hover:!bg-red-50">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                        Delete this event type
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                      )}
 

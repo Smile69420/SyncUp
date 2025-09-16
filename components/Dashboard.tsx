@@ -144,17 +144,11 @@ const Dashboard: React.FC = () => {
         setSelectedBooking(booking);
         setIsDetailsModalOpen(true);
     };
-    
-    const handleDeleteEventType = async (eventTypeId: string, eventTypeName: string) => {
-        if (window.confirm(`Are you sure you want to delete the "${eventTypeName}" event type? This action cannot be undone, but existing bookings will not be affected.`)) {
-            try {
-                await schedulingService.deleteEventType(eventTypeId);
-                await fetchData(); // Refresh data to remove the deleted event type from the UI
-            } catch (error) {
-                console.error("Failed to delete event type:", error);
-                alert("Could not delete the event type. Please try again.");
-            }
-        }
+
+    const handleEventTypeDeleted = async () => {
+        setIsEditorOpen(false);
+        setSelectedEventType(null);
+        await fetchData(); // Refresh data
     };
 
     const handleSaveDetails = async (details: BookingDetails) => {
@@ -244,7 +238,6 @@ const Dashboard: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                     <ReactRouterDOM.Link to={et.link} className="text-sm font-medium text-primary hover:underline">View</ReactRouterDOM.Link>
                                     <button onClick={() => handleEditEventType(et)} className="text-sm font-medium text-gray-500 hover:text-gray-800">Edit</button>
-                                    <button onClick={() => handleDeleteEventType(et.id, et.name)} className="text-sm font-medium text-red-500 hover:text-red-700">Delete</button>
                                 </div>
                             </div>
                         </Card>
@@ -264,6 +257,7 @@ const Dashboard: React.FC = () => {
                     eventType={selectedEventType}
                     onClose={() => setIsEditorOpen(false)}
                     onSave={handleSaveEventType}
+                    onDelete={handleEventTypeDeleted}
                 />
             )}
 
