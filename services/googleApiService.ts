@@ -1,10 +1,11 @@
 import type { Booking, EventType } from '../types';
+import { googleApiConfig } from '../config';
 
 // Define window properties for TypeScript
 declare global {
   interface Window {
     gapi: any;
-    gapiReadyPromise: Promise<void>;
+    google: any; // The new GIS library
   }
 }
 
@@ -13,73 +14,124 @@ let _isSignedIn = false;
 let _userProfile: any = null;
 let _initializationState: 'pending' | 'success' | 'failed' = 'pending';
 let _error: Error | null = null;
-let isInitializing = false;
 const subscribers: ((isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed', error: Error | null) => void)[] = [];
+
+let _tokenClient: any = null;
+let _accessToken: string | null = null;
+let _initPromise: Promise<void> | null = null;
+
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 
 const notifySubscribers = () => {
     subscribers.forEach(cb => cb(_isSignedIn, _userProfile, _initializationState, _error));
 };
 
-// --- Helper Functions ---
-const updateSigninStatus = (isSignedIn: boolean) => {
-    _isSignedIn = isSignedIn;
-    if (isSignedIn) {
-        const profile = window.gapi.auth2.getAuthInstance().currentUser.get().getBasicProfile();
+const fetchUserProfile = async () => {
+    if (!_accessToken) return;
+    try {
+        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { 'Authorization': `Bearer ${_accessToken}` }
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to fetch user profile: ${response.statusText}`);
+        }
+        const profile = await response.json();
         _userProfile = {
-            name: profile.getName(),
-            email: profile.getEmail(),
-            picture: profile.getImageUrl(),
+            name: profile.name,
+            email: profile.email,
+            picture: profile.picture,
         };
-    } else {
+        _isSignedIn = true;
+        notifySubscribers();
+    } catch (error) {
+        console.error("Error fetching user profile:", error);
+        _isSignedIn = false;
         _userProfile = null;
+        notifySubscribers();
     }
-    notifySubscribers();
 };
 
 // --- GOOGLE API SERVICE ---
 export const googleApiService = {
     /**
-     * Attaches to the GAPI client, which is now initialized globally in index.html.
-     * It awaits the `window.gapiReadyPromise` to ensure the client is ready.
+     * Initializes the Google Identity Services (GIS) token client and the GAPI client for API access.
+     * This is now the correct, modern way to handle Google authentication.
      */
-    initialize: async (): Promise<void> => {
-        if (_initializationState === 'success' || isInitializing) {
-            return;
+    initialize: (): Promise<void> => {
+        if (_initPromise) {
+            return _initPromise;
         }
 
-        isInitializing = true;
-        _initializationState = 'pending';
-        _error = null;
-        notifySubscribers();
+        _initPromise = new Promise((resolve, reject) => {
+            const checkGisReady = () => {
+                if (window.google && window.gapi) {
+                    _initializationState = 'pending';
+                    notifySubscribers();
+                    
+                    try {
+                        // 1. Initialize GIS token client for authentication
+                        _tokenClient = window.google.accounts.oauth2.initTokenClient({
+                            client_id: googleApiConfig.clientId,
+                            scope: SCOPES,
+                            callback: async (tokenResponse: any) => {
+                                if (tokenResponse.error) {
+                                    console.error("Token response error:", tokenResponse.error);
+                                    _error = new Error(`Google Auth Error: ${tokenResponse.error_description || tokenResponse.error}`);
+                                    notifySubscribers();
+                                    return;
+                                }
+                                _accessToken = tokenResponse.access_token;
+                                window.gapi.client.setToken({ access_token: _accessToken });
+                                await fetchUserProfile();
+                            },
+                        });
 
-        try {
-            // Wait for the global promise defined and resolved in index.html
-            await window.gapiReadyPromise;
-            
-            console.log('Google API Service successfully connected to pre-initialized GAPI client.');
-            _initializationState = 'success';
-            
-            const authInstance = window.gapi.auth2.getAuthInstance();
-            
-            // Set up a listener for sign-in state changes
-            authInstance.isSignedIn.listen(updateSigninStatus);
-            
-            // Immediately update with the current sign-in status
-            updateSigninStatus(authInstance.isSignedIn.get());
-        } catch (error: any) {
-            console.error("Google API Service failed to connect to the pre-initialized GAPI client:", error);
-            _initializationState = 'failed';
-            _error = error instanceof Error ? error : new Error('Failed to attach to Google API. Check console for details.');
-        } finally {
-            isInitializing = false;
-            notifySubscribers();
-        }
+                        // 2. Initialize GAPI client for making API calls
+                        window.gapi.load('client', () => {
+                            window.gapi.client.init({
+                                apiKey: googleApiConfig.apiKey,
+                                discoveryDocs: [
+                                    'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
+                                    'https://www.googleapis.com/discovery/v1/apis/sheets/v4/rest',
+                                    'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
+                                ],
+                            }).then(() => {
+                                _initializationState = 'success';
+                                _error = null;
+                                notifySubscribers();
+                                console.log('Google API Service initialized successfully.');
+                                resolve();
+                            }).catch((error: any) => {
+                                console.error("GAPI Client Init Error:", error);
+                                const errorMsg = error.details || "Failed to initialize GAPI client. Check API key and discovery docs.";
+                                _initializationState = 'failed';
+                                _error = new Error(errorMsg);
+                                notifySubscribers();
+                                reject(_error);
+                            });
+                        });
+                    } catch (error: any) {
+                         console.error("Google Service Init Error:", error);
+                         _initializationState = 'failed';
+                         _error = new Error("Failed to initialize Google services. The 'google' or 'gapi' objects may not be available.");
+                         notifySubscribers();
+                         reject(_error);
+                    }
+                } else {
+                    setTimeout(checkGisReady, 100); // Poll until the GSI script is loaded
+                }
+            };
+            checkGisReady();
+        });
+        
+        return _initPromise;
     },
 
     subscribe: (callback: (isSignedIn: boolean, profile: any | null, initState: 'pending' | 'success' | 'failed', error: Error | null) => void) => {
         subscribers.push(callback);
+        // Immediately invoke with current state
         callback(_isSignedIn, _userProfile, _initializationState, _error);
-        return () => {
+        return () => { // Return an unsubscribe function
             const index = subscribers.indexOf(callback);
             if (index > -1) subscribers.splice(index, 1);
         };
@@ -89,24 +141,27 @@ export const googleApiService = {
     getUserProfile: () => _userProfile,
 
     signIn: async (): Promise<void> => {
-        // FIX: Refactored to flatten the conditional logic. This resolves a TypeScript error
-        // by making the control flow more explicit: first attempt initialization if needed,
-        // then perform a guard check before proceeding.
-        if (_initializationState !== 'success') {
-             await googleApiService.initialize();
+        if (_initializationState !== 'success' && !_initPromise) {
+            await googleApiService.initialize();
+        } else if (_initPromise) {
+            await _initPromise;
         }
 
-        if (_initializationState !== 'success') {
-            throw new Error("Cannot sign in, Google API is not initialized.");
+        if (_initializationState !== 'success' || !_tokenClient) {
+            throw new Error("Cannot sign in, Google API service is not initialized or failed to initialize.");
         }
-
-        await window.gapi.auth2.getAuthInstance().signIn();
+        
+        // If there's an existing valid token, GIS may not show a popup.
+        // If not, it will prompt the user to sign in and consent.
+        _tokenClient.requestAccessToken({ prompt: '' });
     },
 
     signOut: async () => {
-        if (_initializationState === 'success' && window.gapi.auth2.getAuthInstance()) {
-            await window.gapi.auth2.getAuthInstance().signOut();
+        if (_accessToken) {
+            window.google.accounts.oauth2.revoke(_accessToken, () => {});
         }
+        window.gapi.client.setToken(null);
+        _accessToken = null;
         _isSignedIn = false;
         _userProfile = null;
         notifySubscribers();

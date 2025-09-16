@@ -50,9 +50,11 @@ const GoogleAuthButton: React.FC = () => {
     };
     
     const handleRetry = () => {
-        // The service resets its own state, so we just need to call initialize again.
-        // The subscribe callback will update our component's state automatically.
-        googleApiService.initialize();
+        // The service now returns a promise, so we re-initialize and handle any potential errors.
+        // The subscribe callback will update the component's state automatically upon success or failure.
+        googleApiService.initialize().catch(err => {
+            console.error("Failed to re-initialize Google API service on retry:", err);
+        });
     };
 
 
