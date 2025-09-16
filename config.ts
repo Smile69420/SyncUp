@@ -18,6 +18,7 @@ declare global {
     readonly VITE_FIREBASE_APP_ID: string;
     readonly VITE_GOOGLE_API_KEY: string;
     readonly VITE_GOOGLE_CLIENT_ID: string;
+    readonly VITE_APPS_SCRIPT_URL: string;
   }
 }
 
@@ -48,10 +49,15 @@ export const googleApiConfig = {
     clientId: env.VITE_GOOGLE_CLIENT_ID,
 };
 
+export const config = {
+    appsScriptUrl: env.VITE_APPS_SCRIPT_URL,
+};
+
+
 // Basic validation to ensure environment variables are set
-if (!firebaseConfig.apiKey || !googleApiConfig.apiKey || !googleApiConfig.clientId) {
+if (!firebaseConfig.apiKey) {
     console.error(
-        "FATAL ERROR: Firebase or Google API keys are not configured. " +
+        "FATAL ERROR: Firebase API keys are not configured. " +
         "Ensure you have a .env file with VITE_ prefixed variables for local development, " +
         "or that they are set in your deployment environment (e.g., Vercel)."
     );

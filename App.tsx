@@ -1,22 +1,27 @@
 
-import React, { useState, useEffect } from 'react';
+
+import React from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import Analytics from './components/Analytics';
 import BookingPage from './components/BookingPage';
 import ConfirmationPage from './components/ConfirmationPage';
-import { googleApiService } from './services/googleApiService';
-import GoogleAuthButton from './components/GoogleAuthButton';
 import LoginPage from './components/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import RecordsPage from './components/RecordsPage';
 
 
 const Layout: React.FC = () => {
+    const navigate = ReactRouterDOM.useNavigate();
+    const handleSignOut = () => {
+        sessionStorage.removeItem('isAuthenticated');
+        navigate('/login');
+    };
+
     return (
         <div className="min-h-screen bg-background text-foreground">
-            <Header />
+            <Header onSignOut={handleSignOut} />
             <main className="container mx-auto p-4 sm:p-6 lg:p-8">
                 <ReactRouterDOM.Outlet />
             </main>
@@ -26,11 +31,6 @@ const Layout: React.FC = () => {
 
 
 const App: React.FC = () => {
-
-    useEffect(() => {
-        googleApiService.initialize();
-    }, []);
-
     return (
         <ReactRouterDOM.BrowserRouter>
             <ReactRouterDOM.Routes>
@@ -52,7 +52,7 @@ const App: React.FC = () => {
     );
 };
 
-const Header: React.FC = () => {
+const Header: React.FC<{onSignOut: () => void}> = ({ onSignOut }) => {
     return (
         <header className="bg-card border-b border-gray-200 sticky top-0 z-30 no-print">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -66,7 +66,7 @@ const Header: React.FC = () => {
                         <ReactRouterDOM.Link to="/analytics" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Analytics</ReactRouterDOM.Link>
                         <ReactRouterDOM.Link to="/records" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Records</ReactRouterDOM.Link>
                         <div className="w-px h-6 bg-slate-200"></div>
-                        <GoogleAuthButton />
+                        <button onClick={onSignOut} className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Sign Out</button>
                     </nav>
                 </div>
             </div>

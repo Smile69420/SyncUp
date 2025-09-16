@@ -1,6 +1,5 @@
 import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, ColumnConfiguration } from '../types';
 import { addMinutes, format } from 'date-fns';
-import { googleApiService } from './googleApiService';
 import { db } from './firebaseService';
 import {
     collection,
@@ -11,6 +10,7 @@ import {
     setDoc,
     updateDoc,
 } from 'firebase/firestore';
+import { config } from '../config';
 
 
 // --- DEFAULT CONFIG for the Records Page columns ---
@@ -142,7 +142,7 @@ export const schedulingService = {
   },
 
   /**
-   * [LIVE] Creates a new booking in Firestore and triggers Google integrations.
+   * [LIVE] Creates a new booking in Firestore and triggers server-side Google integrations.
    */
   createBooking: async (bookingData: Omit<Booking, 'id' | 'endTime'>): Promise<Booking> => {
     const eventType = await schedulingService.getEventTypeById(bookingData.eventTypeId);
@@ -219,42 +219,49 @@ export const schedulingService = {
         id: docRef.id,
     };
 
-    // --- LIVE INTEGRATIONS ---
-    if (googleApiService.getIsSignedIn()) {
-        // 1. Google Meet Link Generation
-        if (eventType.mode === 'online' && eventType.conferencing?.provider === 'google-meet') {
-            try {
-                const meetingLink = await googleApiService.createCalendarEvent(newBooking, eventType);
-                newBooking.meetingLink = meetingLink;
-                console.log(`[LIVE] Google Meet link created: ${meetingLink}`);
-            } catch (error) {
-                console.error("[LIVE] Failed to create Google Meet link:", error);
-            }
-        }
+    // --- SERVER-SIDE INTEGRATIONS VIA GOOGLE APPS SCRIPT ---
+    const appsScriptUrl = config.appsScriptUrl;
+    if (appsScriptUrl && (eventType.googleSheetConfig?.sheetId || (eventType.mode === 'online' && eventType.conferencing?.provider === 'google-meet'))) {
+        console.log(`[APPS SCRIPT] Sending booking data...`);
+
+        const bookingPayload = { ...newBooking }; // Already contains id, startTime, endTime
         
-        // 2. Google Sheet Sync
-        if (eventType.googleSheetConfig?.sheetId) {
-            console.log(`[LIVE] Syncing booking ${newBooking.id} to Google Sheet: ${eventType.googleSheetConfig.sheetName} (${eventType.googleSheetConfig.sheetId})`);
-            const dataToSync = {
-                bookingId: newBooking.id,
-                eventName: eventType.name,
-                startTime: newBooking.startTime.toISOString(),
-                endTime: newBooking.endTime.toISOString(),
-                bookerName: newBooking.bookerName,
-                bookerEmail: newBooking.bookerEmail,
-                bookerPhone: newBooking.bookerPhone,
-                meetingLink: newBooking.meetingLink || eventType.conferencing?.customLink || '',
-                ...newBooking.customAnswers,
-            };
-            try {
-                await googleApiService.appendToSheet(eventType.googleSheetConfig.sheetId, dataToSync);
-                console.log('[LIVE] Data payload synced to sheet:', dataToSync);
-            } catch(error) {
-                console.error("[LIVE] Failed to sync to Google Sheet:", error);
+        try {
+            // Use `fetch` to send data to the deployed Google Apps Script URL.
+            // This script acts as a secure backend to handle Google API interactions.
+            const response = await fetch(appsScriptUrl, {
+                method: 'POST',
+                mode: 'cors', // Required for cross-origin requests
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8', // Apps Script expects text/plain for POST data
+                },
+                // Redirect is needed as Apps Script POST responses can be redirects
+                redirect: 'follow', 
+                body: JSON.stringify({ eventType, bookingData: bookingPayload })
+            });
+
+            // The response from a successfully executed Apps Script web app with a text output will be a redirect
+            // followed by the actual response. We need to handle this to get the JSON.
+            if (response.ok) {
+                 const scriptResponse = await response.json();
+                 if (scriptResponse.status === 'success') {
+                    if (scriptResponse.meetingLink) {
+                        newBooking.meetingLink = scriptResponse.meetingLink;
+                        console.log(`[APPS SCRIPT] Google Meet link received: ${scriptResponse.meetingLink}`);
+                    }
+                    console.log(`[APPS SCRIPT] Backend message: ${scriptResponse.message}`);
+                } else {
+                    console.error('[APPS SCRIPT] Error from backend:', scriptResponse.message);
+                }
+            } else {
+                 const textResponse = await response.text();
+                 console.error('[APPS SCRIPT] Received non-OK response:', response.status, textResponse);
             }
+        } catch (error) {
+            console.error("[APPS SCRIPT] Network error calling Google Apps Script:", error);
         }
     } else {
-         console.log('[SKIPPING] Google integrations because user is not signed in.');
+         console.log('[SKIPPING] Google Apps Script integration because URL or integration configs are missing.');
     }
     
     // If a meeting link was generated, update the booking in Firestore

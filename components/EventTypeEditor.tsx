@@ -4,8 +4,6 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { format } from 'date-fns';
 import Select from './ui/Select';
-import GoogleSheetLinker from './GoogleSheetLinker';
-import { googleApiService } from '../services/googleApiService';
 
 interface EventTypeEditorProps {
     eventType: EventType | null;
@@ -191,10 +189,6 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
     const [customFormFields, setCustomFormFields] = useState<FormField[]>([]);
     const [activeTab, setActiveTab] = useState<'details' | 'availability' | 'questions' | 'integrations'>('details');
 
-    const [isGoogleConnected, setIsGoogleConnected] = useState(false);
-    const [googleUser, setGoogleUser] = useState<any | null>(null);
-    const [isSheetLinkerOpen, setIsSheetLinkerOpen] = useState(false);
-
 
     useEffect(() => {
         if (eventType) {
@@ -240,17 +234,6 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
             ]);
         }
     }, [eventType]);
-
-    useEffect(() => {
-        // Subscribe to real-time auth changes from the Google API service
-        const unsubscribe = googleApiService.subscribe((signedIn, profile) => {
-            setIsGoogleConnected(signedIn);
-            setGoogleUser(profile);
-        });
-
-        // Cleanup subscription on component unmount
-        return unsubscribe;
-    }, []);
 
     const handleAvailabilityChange = (dayIndex: number, field: 'startTime' | 'endTime', value: string) => {
         const updatedAvailability = [...availability];
@@ -382,25 +365,6 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
         }));
     };
 
-    const handleGoogleConnect = async () => {
-        await googleApiService.signIn();
-    };
-    
-    const handleGoogleDisconnect = () => {
-        googleApiService.signOut();
-        setGoogleSheetConfig(undefined); // Also unlink sheet on disconnect
-    }
-
-    const handleSheetLinked = (sheet: { sheetId: string; sheetName: string }) => {
-        setGoogleSheetConfig(sheet);
-        setIsSheetLinkerOpen(false);
-    }
-    
-    const handleUnlinkSheet = () => {
-        setGoogleSheetConfig(undefined);
-    }
-
-
     const handleSaveClick = () => {
         const dataToSave = {
             name,
@@ -505,9 +469,6 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                             onChange={e => {
                                                 const provider = e.target.value as 'google-meet' | 'custom';
                                                 setConferencing(prev => ({ ...prev, provider }));
-                                                if (provider === 'google-meet' && !isGoogleConnected) {
-                                                    handleGoogleConnect();
-                                                }
                                             }}
                                         >
                                             <option value="google-meet">Google Meet (auto-create link)</option>
@@ -521,9 +482,6 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                                 placeholder="https://your-meeting-link.com" 
                                                 className={`${inputClasses} mt-2`}
                                             />
-                                        )}
-                                         {conferencing?.provider === 'google-meet' && !isGoogleConnected && (
-                                            <p className="text-xs text-slate-500 mt-1">Connect your Google account in the 'Integrations' tab to enable this.</p>
                                         )}
                                     </div>
                                 )}
@@ -549,50 +507,44 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                      <img src="https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" alt="Google logo" className="w-16 h-auto pt-1" />
                                     <div>
                                         <h3 className="text-lg font-semibold">Google Integration</h3>
-                                        <p className="text-sm text-slate-600">Connect your Google account to automatically create Google Meet links and sync bookings to a Google Sheet.</p>
-                                        {isGoogleConnected ? (
-                                            <div className="mt-3 flex items-center justify-between bg-emerald-50 p-3 rounded-md border border-emerald-200">
-                                                <div className="flex items-center gap-2">
-                                                    {googleUser?.picture && <img src={googleUser.picture} alt="user avatar" className="w-6 h-6 rounded-full" />}
-                                                    <p className="text-sm font-medium text-emerald-800">
-                                                        Connected as {googleUser?.email || '...'}
-                                                    </p>
-                                                </div>
-                                                <Button onClick={handleGoogleDisconnect} variant="outline" size="sm">Disconnect</Button>
-                                            </div>
-                                        ) : (
-                                            <Button onClick={handleGoogleConnect} className="mt-3" size="sm">Connect to Google</Button>
-                                        )}
+                                        <p className="text-sm text-slate-600">
+                                            Enable Google Meet link generation and Google Sheets sync by deploying the provided Google Apps Script.
+                                            Once deployed, your app will automatically handle these integrations.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
 
-                            {isGoogleConnected && (
-                                <div className="p-4 border rounded-lg bg-white shadow-sm">
-                                     <h3 className="text-lg font-semibold">Google Sheets Sync</h3>
-                                     <p className="text-sm text-slate-600 mb-4">Automatically add new bookings as rows in a Google Sheet.</p>
-                                     {googleSheetConfig ? (
-                                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-md">
-                                            <div>
-                                                <p className="text-sm font-medium">Linked to:</p>
-                                                <a href={`https://docs.google.com/spreadsheets/d/${googleSheetConfig.sheetId}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary truncate hover:underline">
-                                                    {googleSheetConfig.sheetName}
-                                                </a>
-                                            </div>
-                                            <Button onClick={handleUnlinkSheet} variant="outline" size="sm">Unlink</Button>
-                                        </div>
-                                     ) : (
-                                        <Button onClick={() => setIsSheetLinkerOpen(true)}>Link a Google Sheet</Button>
-                                     )}
-                                </div>
-                            )}
-
-                             {isSheetLinkerOpen && isGoogleConnected && (
-                                <GoogleSheetLinker 
-                                    onClose={() => setIsSheetLinkerOpen(false)}
-                                    onLink={handleSheetLinked}
-                                />
-                             )}
+                            <div className="p-4 border rounded-lg bg-white shadow-sm">
+                                 <h3 className="text-lg font-semibold">Google Sheets Sync</h3>
+                                 <p className="text-sm text-slate-600 mb-4">Automatically add new bookings as rows in a Google Sheet. Enter the Sheet ID and Sheet Name below.</p>
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                     <div>
+                                         <label htmlFor="sheetId" className="block text-sm font-medium text-slate-700">Google Sheet ID</label>
+                                         <input 
+                                            type="text" 
+                                            id="sheetId" 
+                                            value={googleSheetConfig?.sheetId || ''} 
+                                            onChange={e => setGoogleSheetConfig(prev => ({ ...prev, sheetId: e.target.value, sheetName: prev?.sheetName || 'Sheet1' }))} 
+                                            className={inputClasses} 
+                                            placeholder="e.g., 1aBcDeFgHiJkLmNoPqRsTuVwXyZ" 
+                                        />
+                                        <p className="text-xs text-slate-500 mt-1">Found in your Google Sheet URL.</p>
+                                     </div>
+                                      <div>
+                                         <label htmlFor="sheetName" className="block text-sm font-medium text-slate-700">Sheet Name (Tab Name)</label>
+                                         <input 
+                                            type="text" 
+                                            id="sheetName" 
+                                            value={googleSheetConfig?.sheetName || ''} 
+                                            onChange={e => setGoogleSheetConfig(prev => ({ ...prev, sheetName: e.target.value, sheetId: prev?.sheetId || '' }))} 
+                                            className={inputClasses} 
+                                            placeholder="e.g., Bookings" 
+                                        />
+                                        <p className="text-xs text-slate-500 mt-1">The exact name of the tab in your sheet.</p>
+                                     </div>
+                                 </div>
+                            </div>
                         </div>
                      )}
 
