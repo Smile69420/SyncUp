@@ -180,7 +180,8 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
     const [mode, setMode] = useState<'online' | 'offline'>('online');
     const [location, setLocation] = useState('');
     const [conferencing, setConferencing] = useState<EventType['conferencing']>({ provider: 'google-meet' });
-    const [googleSheetConfig, setGoogleSheetConfig] = useState<EventType['googleSheetConfig'] | undefined>(undefined);
+    const [sheetId, setSheetId] = useState('');
+    const [sheetName, setSheetName] = useState('');
     const [availability, setAvailability] = useState<Availability[]>([]);
     const [bufferBefore, setBufferBefore] = useState(0);
     const [bufferAfter, setBufferAfter] = useState(0);
@@ -210,7 +211,8 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
             setUnavailableDates(eventType.unavailableDates || []);
             setBookingHorizonDays(eventType.bookingHorizonDays || 30);
             setCustomFormFields(eventType.customFormFields || []);
-            setGoogleSheetConfig(eventType.googleSheetConfig);
+            setSheetId(eventType.googleSheetConfig?.sheetId || '');
+            setSheetName(eventType.googleSheetConfig?.sheetName || '');
         } else {
              setName('New Event');
              setDuration(30);
@@ -226,7 +228,8 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
              setUnavailableDates([]);
              setBookingHorizonDays(30);
              setCustomFormFields([]);
-             setGoogleSheetConfig(undefined);
+             setSheetId('');
+             setSheetName('');
              setAvailability([
                 { dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
                 { dayOfWeek: 2, startTime: '09:00', endTime: '17:00' },
@@ -377,7 +380,7 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
             mode,
             location,
             conferencing,
-            googleSheetConfig,
+            googleSheetConfig: sheetId.trim() && sheetName.trim() ? { sheetId: sheetId.trim(), sheetName: sheetName.trim() } : undefined,
             availability,
             bufferBefore,
             bufferAfter,
@@ -540,8 +543,8 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                          <input 
                                             type="text" 
                                             id="sheetId" 
-                                            value={googleSheetConfig?.sheetId || ''} 
-                                            onChange={e => setGoogleSheetConfig(prev => ({ ...prev, sheetId: e.target.value, sheetName: prev?.sheetName || 'Sheet1' }))} 
+                                            value={sheetId} 
+                                            onChange={e => setSheetId(e.target.value)} 
                                             className={inputClasses} 
                                             placeholder="e.g., 1aBcDeFgHiJkLmNoPqRsTuVwXyZ" 
                                         />
@@ -552,8 +555,8 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                          <input 
                                             type="text" 
                                             id="sheetName" 
-                                            value={googleSheetConfig?.sheetName || ''} 
-                                            onChange={e => setGoogleSheetConfig(prev => ({ ...prev, sheetName: e.target.value, sheetId: prev?.sheetId || '' }))} 
+                                            value={sheetName} 
+                                            onChange={e => setSheetName(e.target.value)} 
                                             className={inputClasses} 
                                             placeholder="e.g., Bookings" 
                                         />

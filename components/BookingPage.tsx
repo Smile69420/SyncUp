@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
@@ -534,7 +535,7 @@ const BookingPage: React.FC = () => {
                     </div>
 
                     {/* Form View */}
-                    <div className={`absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out transform ${view === 'form' ? 'translate-x-0' : 'translate-x-full'}`}>
+                    <div className={`absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out transform overflow-y-auto custom-scrollbar pr-4 ${view === 'form' ? 'translate-x-0' : 'translate-x-full'}`}>
                        {selectedSlot && (
                            <BookingForm
                                eventType={eventType}

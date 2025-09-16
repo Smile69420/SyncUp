@@ -245,14 +245,20 @@ export const schedulingService = {
             // followed by the actual response. We need to handle this to get the JSON.
             if (response.ok) {
                  const scriptResponse = await response.json();
-                 if (scriptResponse.status === 'success') {
+                 if (scriptResponse.status === 'success' || scriptResponse.status === 'partial_success') {
                     if (scriptResponse.meetingLink) {
                         newBooking.meetingLink = scriptResponse.meetingLink;
                         console.log(`[APPS SCRIPT] Google Meet link received: ${scriptResponse.meetingLink}`);
                     }
-                    console.log(`[APPS SCRIPT] Backend message: ${scriptResponse.message}`);
+                    if (scriptResponse.message) {
+                        console.log(`[APPS SCRIPT] Backend message: ${scriptResponse.message}`);
+                    }
+                    // Log any errors that occurred on the backend for easier debugging
+                    if (scriptResponse.errors && scriptResponse.errors.length > 0) {
+                        console.error('[APPS SCRIPT] Backend errors occurred:', scriptResponse.errors.join('\n'));
+                    }
                 } else {
-                    console.error('[APPS SCRIPT] Error from backend:', scriptResponse.message);
+                    console.error('[APPS SCRIPT] Error from backend:', scriptResponse.message, scriptResponse.errors);
                 }
             } else {
                  const textResponse = await response.text();
