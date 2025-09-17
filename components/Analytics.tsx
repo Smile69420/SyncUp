@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Sector } from 'recharts';
-import { schedulingService } from '../services/schedulingService';
+import { firestoreService } from '../services/firestoreService';
 import type { Booking, EventType } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
@@ -123,8 +123,8 @@ const Analytics: React.FC = () => {
             setLoading(true);
             try {
                 const [books, types] = await Promise.all([
-                    schedulingService.getBookings(),
-                    schedulingService.getEventTypes(),
+                    firestoreService.getBookings(),
+                    firestoreService.getEventTypes(),
                 ]);
                 setBookings(books.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
                 setEventTypes(types);

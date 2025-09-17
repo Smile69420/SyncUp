@@ -112,6 +112,8 @@ export interface BookingDetails {
     followUpStatus?: 'Done' | 'Pending';
     meetingStatus?: 'Scheduled' | 'Completed' | 'Cancelled' | 'No Show';
     firefliesLink?: string;
+    // New field for user-defined dynamic columns
+    customFields?: { [key: string]: string | boolean | number };
 }
 
 export type BookingDetailsDocument = Omit<BookingDetails, 'id'>;
@@ -121,10 +123,15 @@ export type MergedBooking = Booking & BookingDetails & {
     mode: string;
 };
 
+// Configuration for a single column in the Records page
 export interface ColumnConfig {
-  key: keyof MergedBooking | string; // Use string for derived keys
+  key: keyof MergedBooking | string;
   label: string;
   isVisible: boolean;
+  // New properties for dynamic column types
+  type?: 'text' | 'textarea' | 'select' | 'checkbox' | 'url';
+  options?: string[]; // for 'select' type
+  isCustom?: boolean; // Flag to identify user-created columns
 }
 
 export type ColumnConfiguration = ColumnConfig[];

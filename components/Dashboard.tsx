@@ -1,11 +1,12 @@
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
 import CalendarView from './CalendarView';
 import EventTypeEditor from './EventTypeEditor';
-import { schedulingService } from '../services/schedulingService';
+import { firestoreService } from '../services/firestoreService';
 import type { EventType, Booking, BookingDetails, MergedBooking } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
@@ -40,9 +41,9 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         try {
             const [types, books, details] = await Promise.all([
-                schedulingService.getEventTypes(),
-                schedulingService.getBookings(),
-                schedulingService.getBookingDetails(),
+                firestoreService.getEventTypes(),
+                firestoreService.getBookings(),
+                firestoreService.getBookingDetails(),
             ]);
             setEventTypes(types);
             setBookings(books.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
@@ -126,7 +127,7 @@ const Dashboard: React.FC = () => {
     };
 
     const handleSaveEventType = async (eventType: Omit<EventType, 'id' | 'link'> & { id?: string }) => {
-        await schedulingService.saveEventType(eventType);
+        await firestoreService.saveEventType(eventType);
         setIsEditorOpen(false);
         setSelectedEventType(null);
         await fetchData(); // Refresh data
@@ -154,7 +155,7 @@ const Dashboard: React.FC = () => {
     const handleSaveDetails = async (details: BookingDetails) => {
         try {
             const { id, ...dataToSave } = details;
-            await schedulingService.updateBookingDetails(id, dataToSave);
+            await firestoreService.updateBookingDetails(id, dataToSave);
             setIsDetailsModalOpen(false);
             setSelectedBooking(null);
             await fetchData(); // Refresh data

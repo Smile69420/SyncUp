@@ -1,9 +1,10 @@
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
-import { schedulingService } from '../services/schedulingService';
+import { firestoreService } from '../services/firestoreService';
 import type { EventType, Booking, TimeSlot, FormField } from '../types';
 import Spinner from './ui/Spinner';
 import Button from './ui/Button';
@@ -289,8 +290,8 @@ const BookingPage: React.FC = () => {
             setLoading(true);
             try {
                 const [type, allBookings] = await Promise.all([
-                    schedulingService.getEventTypeById(eventTypeId),
-                    schedulingService.getBookings()
+                    firestoreService.getEventTypeById(eventTypeId),
+                    firestoreService.getBookings()
                 ]);
                 if (type) {
                     setEventType(type);
@@ -492,7 +493,7 @@ const BookingPage: React.FC = () => {
         if (!eventTypeId || !selectedSlot || !validateForm()) return;
         setIsBooking(true);
         try {
-            const newBooking = await schedulingService.createBooking({
+            const newBooking = await firestoreService.createBooking({
                 eventTypeId: eventTypeId,
                 startTime: selectedSlot,
                 bookerName: formState.name,
