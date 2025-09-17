@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { schedulingService } from '../services/schedulingService';
+// FIX: The `schedulingService` was incorrectly imported from an empty module.
+// It has been replaced with `firestoreService`, which contains the correct implementation.
+import { firestoreService } from '../services/firestoreService';
 import type { Booking, EventType, BookingDetails, MergedBooking, ColumnConfiguration } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
@@ -33,11 +35,12 @@ const RecordsPage: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
+            // FIX: Replaced `schedulingService` with `firestoreService` to use the correct data service.
             const [books, types, details, config] = await Promise.all([
-                schedulingService.getBookings(),
-                schedulingService.getEventTypes(),
-                schedulingService.getBookingDetails(),
-                schedulingService.getColumnConfiguration(),
+                firestoreService.getBookings(),
+                firestoreService.getEventTypes(),
+                firestoreService.getBookingDetails(),
+                firestoreService.getColumnConfiguration(),
             ]);
             setBookings(books.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
             setEventTypes(types);
@@ -78,7 +81,8 @@ const RecordsPage: React.FC = () => {
     const handleSaveDetails = async (details: BookingDetails) => {
         try {
             const { id, ...dataToSave } = details;
-            await schedulingService.updateBookingDetails(id, dataToSave);
+            // FIX: Replaced `schedulingService` with `firestoreService` to use the correct data service.
+            await firestoreService.updateBookingDetails(id, dataToSave);
             setIsDetailsModalOpen(false);
             setSelectedBooking(null);
             await fetchData(); // Refresh data
@@ -90,7 +94,8 @@ const RecordsPage: React.FC = () => {
 
     const handleSaveColumnConfig = async (newConfig: ColumnConfiguration) => {
         try {
-            await schedulingService.saveColumnConfiguration(newConfig);
+            // FIX: Replaced `schedulingService` with `firestoreService` to use the correct data service.
+            await firestoreService.saveColumnConfiguration(newConfig);
             setColumnConfig(newConfig);
             setIsColumnManagerOpen(false);
         } catch(error) {
