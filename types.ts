@@ -142,3 +142,10 @@ export interface CalendarViewProps {
     onEventClick: (booking: MergedBooking) => void;
     onInitiateReschedule?: (booking: MergedBooking) => void;
 }
+
+export interface TodaysMeetingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  meetings: MergedBooking[];
+  onViewDetails: (booking: MergedBooking) => void;
+}

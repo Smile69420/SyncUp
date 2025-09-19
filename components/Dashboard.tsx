@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
@@ -12,9 +13,10 @@ import { format, isToday, isWithinInterval, addDays, startOfToday, subDays, isPa
 import BookingDetailsEditorModal from './BookingDetailsEditorModal';
 import BookingPreviewModal from './BookingPreviewModal';
 import RescheduleModal from './RescheduleModal';
+import TodaysMeetingsModal from './TodaysMeetingsModal';
 
-const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode }> = ({ title, value, icon }) => (
-    <Card className="flex items-center p-4">
+const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode, onClick?: () => void, isClickable?: boolean }> = ({ title, value, icon, onClick, isClickable }) => (
+    <Card className={`flex items-center p-4 ${isClickable ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''}`} onClick={onClick}>
         <div className="p-3 rounded-full bg-primary/10 text-primary mr-4">{icon}</div>
         <div>
             <p className="text-sm text-gray-500">{title}</p>
@@ -38,6 +40,7 @@ const Dashboard: React.FC = () => {
     // State for booking modals
     const [bookingToPreview, setBookingToPreview] = useState<MergedBooking | null>(null);
     const [bookingToReschedule, setBookingToReschedule] = useState<MergedBooking | null>(null);
+    const [isTodaysMeetingsModalOpen, setIsTodaysMeetingsModalOpen] = useState(false);
 
 
     const fetchData = async () => {
@@ -78,13 +81,18 @@ const Dashboard: React.FC = () => {
         });
     }, [bookings, eventTypes, bookingDetails]);
     
+    const todaysMeetings = useMemo(() => {
+        return mergedData
+            .filter(b => isToday(b.startTime))
+            .sort((a,b) => a.startTime.getTime() - b.startTime.getTime());
+    }, [mergedData]);
+
     const dashboardStats = useMemo(() => {
         const today = startOfToday();
         const next7Days = { start: today, end: addDays(today, 7) };
 
         const upcomingBookings = bookings.filter(b => isWithinInterval(b.startTime, next7Days)).length;
-        const todaysBookings = bookings.filter(b => isToday(b.startTime)).length;
-
+        
         const last30DaysBookings = bookings.filter(b => isWithinInterval(b.startTime, { start: subDays(today, 30), end: today }));
         const bookingsByDay = last30DaysBookings.reduce((acc, booking) => {
             const day = format(booking.startTime, 'yyyy-MM-dd');
@@ -102,14 +110,13 @@ const Dashboard: React.FC = () => {
     
         const mostBookedEvent = Object.entries(bookingsByEventType).sort((a, b) => b[1] - a[1])[0];
 
-
         return {
             upcomingBookings,
-            todaysBookings,
+            todaysBookingsCount: todaysMeetings.length,
             busiestDay: busiestDay ? { day: format(new Date(busiestDay[0]), 'MMM do'), count: busiestDay[1] } : { day: 'N/A', count: 0 },
             mostBookedEvent: mostBookedEvent ? { name: mostBookedEvent[0], count: mostBookedEvent[1] } : { name: 'N/A', count: 0 },
         };
-    }, [bookings, eventTypes]);
+    }, [bookings, eventTypes, todaysMeetings]);
 
     const pendingUpdates = useMemo(() => {
         const now = new Date();
@@ -188,6 +195,11 @@ const Dashboard: React.FC = () => {
         }
     };
 
+    const handleViewDetailsFromTodaysList = (booking: MergedBooking) => {
+        setIsTodaysMeetingsModalOpen(false);
+        setBookingToPreview(booking);
+    };
+
 
     if (loading) {
         return <div className="flex justify-center items-center h-96"><Spinner /></div>;
@@ -236,7 +248,13 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-2xl font-semibold mb-4">At a Glance</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                      <StatCard title="Upcoming (Next 7 days)" value={dashboardStats.upcomingBookings.toString()} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>} />
-                     <StatCard title="Today's Meetings" value={dashboardStats.todaysBookings.toString()} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>} />
+                     <StatCard 
+                        title="Today's Meetings" 
+                        value={dashboardStats.todaysBookingsCount.toString()} 
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>} 
+                        onClick={() => { if (dashboardStats.todaysBookingsCount > 0) setIsTodaysMeetingsModalOpen(true); }}
+                        isClickable={dashboardStats.todaysBookingsCount > 0}
+                     />
                      <StatCard title="Busiest Day (Last 30d)" value={`${dashboardStats.busiestDay.day} (${dashboardStats.busiestDay.count} mtgs)`} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>} />
                      <StatCard title="Most Booked Event" value={dashboardStats.mostBookedEvent.name} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>} />
                 </div>
@@ -292,6 +310,8 @@ const Dashboard: React.FC = () => {
             {isDetailsModalOpen && selectedBooking && (
                 <BookingDetailsEditorModal 
                     booking={selectedBooking}
+                    // FIX: The BookingDetailsEditorModal component requires the eventType prop. Find the event type from the eventTypes state using the eventTypeId from the selected booking.
+                    eventType={eventTypes.find(et => et.id === selectedBooking.eventTypeId)}
                     onClose={() => setIsDetailsModalOpen(false)}
                     onSave={handleSaveDetails}
                 />
@@ -316,6 +336,14 @@ const Dashboard: React.FC = () => {
                 />
             )}
 
+            {isTodaysMeetingsModalOpen && (
+                <TodaysMeetingsModal
+                    isOpen={isTodaysMeetingsModalOpen}
+                    onClose={() => setIsTodaysMeetingsModalOpen(false)}
+                    meetings={todaysMeetings}
+                    onViewDetails={handleViewDetailsFromTodaysList}
+                />
+            )}
         </div>
     );
 };

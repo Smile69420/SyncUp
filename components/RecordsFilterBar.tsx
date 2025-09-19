@@ -69,9 +69,10 @@ interface RecordsFilterBarProps {
     onFilterChange: (filters: any) => void;
     onExport: () => void;
     resultsCount: number;
+    hideEventTypeFilter?: boolean;
 }
 
-const RecordsFilterBar: React.FC<RecordsFilterBarProps> = ({ eventTypes, onFilterChange, onExport, resultsCount }) => {
+const RecordsFilterBar: React.FC<RecordsFilterBarProps> = ({ eventTypes, onFilterChange, onExport, resultsCount, hideEventTypeFilter = false }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([]);
     const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
@@ -107,16 +108,18 @@ const RecordsFilterBar: React.FC<RecordsFilterBarProps> = ({ eventTypes, onFilte
                     placeholder="Search by name, email, company..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm lg:col-span-2"
+                    className={`w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm ${hideEventTypeFilter ? 'lg:col-span-3' : 'lg:col-span-2'}`}
                 />
-                <FilterDropdown label="Event Type" options={eventTypeOptions} selected={selectedEventTypes} onChange={setSelectedEventTypes} />
+                {!hideEventTypeFilter && (
+                    <FilterDropdown label="Event Type" options={eventTypeOptions} selected={selectedEventTypes} onChange={setSelectedEventTypes} />
+                )}
                 <FilterDropdown label="Status" options={statusOptions} selected={selectedStatuses} onChange={setSelectedStatuses} />
             </div>
             <div className="flex items-center justify-between mt-4 pt-4 border-t">
                  <p className="text-sm text-slate-600 font-medium">
                     {resultsCount} {resultsCount === 1 ? 'record' : 'records'} found
                 </p>
-                <Button onClick={onExport} variant="outline" size="sm">
+                <Button onClick={onExport} variant="outline" size="sm" disabled={resultsCount === 0}>
                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                     Export CSV
                 </Button>
