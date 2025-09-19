@@ -1,5 +1,5 @@
-import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, ColumnConfiguration, ColumnConfig, MergedBooking } from '../types';
-import { addMinutes, format } from 'date-fns';
+import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, ColumnConfiguration } from '../types';
+import { addMinutes } from 'date-fns';
 import { db } from './firebaseService';
 import {
     collection,
@@ -15,55 +15,6 @@ import {
     writeBatch,
 } from 'firebase/firestore';
 import { config } from '../config';
-
-
-// --- DEFAULT PREDEFINED COLUMNS for the Records Page ---
-// This serves as the base for generating the first-time column configuration.
-const PREDEFINED_COLUMNS: ColumnConfig[] = [
-    { key: 'derivedDate', label: 'Date', isVisible: true },
-    { key: 'companyName', label: 'Company Name', isVisible: true },
-    { key: 'derivedWeekNo', label: 'Week No.', isVisible: true },
-    { key: 'derivedSlot', label: 'Slot', isVisible: true },
-    { key: 'derivedDay', label: 'Day', isVisible: true },
-    { key: 'consultationDoneBy', label: 'Consultation Done By', isVisible: true },
-    { key: 'mode', label: 'Mode', isVisible: true },
-    { key: 'meetingStatus', label: 'Meeting Status', isVisible: true, type: 'select', options: ['Scheduled', 'Completed', 'Cancelled', 'No Show'] },
-    { key: 'derivedMonth', label: 'Month', isVisible: true },
-    { key: 'bookerName', label: 'Client Name', isVisible: true },
-    { key: 'designation', label: 'Designation', isVisible: true },
-    { key: 'generalizedDesignation', label: 'Generalized Designation', isVisible: true },
-    { key: 'bookerPhone', label: 'Phone Number', isVisible: true },
-    { key: 'level', label: 'Level', isVisible: false },
-    { key: 'capability', label: 'Capability', isVisible: false },
-    { key: 'feedbackSent', label: 'Feedback Sent', isVisible: true, type: 'select', options: ['Pending', 'Yes', 'No'] },
-    { key: 'shownInterestInMembership', label: 'Shown Interest in Membership', isVisible: false, type: 'checkbox' },
-    { key: 'membership', label: 'Membership', isVisible: false, type: 'checkbox' },
-    { key: 'membershipVerification', label: 'Membership Verification', isVisible: false, type: 'checkbox' },
-    { key: 'bookerEmail', label: 'Email Id', isVisible: true },
-    { key: 'state', label: 'State', isVisible: false },
-    { key: 'district', label: 'District', isVisible: false },
-    { key: 'womenEntrepreneur', label: 'Women Entrepreneur', isVisible: false, type: 'checkbox' },
-    { key: 'noOfEmployeesInCompany', label: 'No of Employees in Company', isVisible: false },
-    { key: 'noOfAttendants', label: 'No of Attendants', isVisible: false },
-    { key: 'sector', label: 'Sector', isVisible: true },
-    { key: 'sectorGeneralized', label: 'Sector Generalized', isVisible: false },
-    { key: 'operationsPerfomedInBrief', label: 'Operations Perfomed In Brief', isVisible: false, type: 'textarea' },
-    { key: 'scale', label: 'Scale', isVisible: false },
-    { key: 'challenges', label: 'Challenges', isVisible: false, type: 'textarea' },
-    { key: 'manualTasks', label: 'Manual Tasks', isVisible: false, type: 'textarea' },
-    { key: 'suggestedTools', label: 'Suggested Tools', isVisible: false, type: 'textarea' },
-    { key: 'toolCategories', label: 'Tool Categories', isVisible: false },
-    { key: 'aiFamiliarityPre', label: 'AI Familiarity (Pre Consultation)', isVisible: false },
-    { key: 'kpi', label: 'KPI', isVisible: false },
-    { key: 'aiFamiliarityPost', label: 'AI Familiarty Post Consultation', isVisible: false },
-    { key: 'kpiValue', label: 'KPI Value', isVisible: false },
-    { key: 'howDidTheyGetToKnow', label: 'How did they get to know about AI Consultation', isVisible: false },
-    { key: 'additionalNotes1', label: 'Column 35', isVisible: false },
-    { key: 'notesForReport', label: 'Notes for Report', isVisible: true, type: 'textarea' },
-    { key: 'followUpRequestStatus', label: 'Follow Up Request Status', isVisible: false, type: 'select', options: ['Not Requested', 'Requested', 'Completed'] },
-    { key: 'followUpStatus', label: 'Follow Up (Done / Pending )', isVisible: true, type: 'select', options: ['Pending', 'Done'] },
-    { key: 'firefliesLink', label: 'Recording Link', isVisible: false, type: 'url' },
-];
 
 
 // --- SERVICE LOGIC using Firebase Firestore ---
@@ -175,12 +126,16 @@ export const firestoreService = {
                     sheetName: eventType.googleSheetConfig.sheetName,
                 };
 
-                await fetch(appsScriptUrl, {
+                const response = await fetch(appsScriptUrl, {
                     method: 'POST',
-                    mode: 'no-cors',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(payload)
                 });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Apps Script error: ${response.statusText} - ${errorText}`);
+                }
                 console.log(`[APPS SCRIPT] Sent status update for booking ${bookingId}`);
             }
         } catch (error) {
@@ -241,47 +196,29 @@ export const firestoreService = {
         try {
             const response = await fetch(appsScriptUrl, {
                 method: 'POST',
-                mode: 'no-cors', // Use no-cors for simple requests to Apps Script
                 headers: {
                     'Content-Type': 'text/plain;charset=utf-8',
                 },
-                redirect: 'follow', 
                 body: JSON.stringify({ eventType, bookingData: bookingPayload })
             });
 
-            // With no-cors, we can't read the response, but we can check if the request was sent.
-            // A proper implementation for reading the response would require a more complex setup.
-            // For now, we'll optimistically assume success if the fetch doesn't throw.
-             // We'll update the meeting link on the client side after a delay.
-             if (eventType.conferencing?.provider === 'google-meet') {
-                setTimeout(async () => {
-                    try {
-                        const bookingDoc = await getDoc(doc(db, 'bookings', newBooking.id));
-                        const updatedBooking = bookingDoc.data();
-                        if (updatedBooking?.meetingLink) {
-                            console.log(`[APPS SCRIPT] Google Meet link confirmed via Firestore.`);
-                        }
-                    } catch(e) {
-                        console.error("Error confirming meeting link", e)
-                    }
-                }, 10000); // 10 seconds delay
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Apps Script error: ${response.statusText} - ${errorText}`);
             }
 
+            const responseData = await response.json();
+            console.log('[APPS SCRIPT] Response received:', responseData);
+
+            if (responseData.status === 'success' && responseData.meetingLink) {
+                newBooking.meetingLink = responseData.meetingLink;
+            }
         } catch (error) {
-            console.error("[APPS SCRIPT] Network error calling Google Apps Script:", error);
+            console.error("[APPS SCRIPT] Error calling Google Apps Script:", error);
+            // Let the user know the booking was made but integration might have failed.
+            alert("Your booking was successful, but there was an issue with a Google integration (Calendar or Sheets). Please check your email for a confirmation. Error: " + (error as Error).message);
         }
     }
-    
-    const appsScriptUpdatePromise = new Promise(resolve => setTimeout(resolve, 5000));
-    await appsScriptUpdatePromise;
-
-    // Fetch the potentially updated booking to get the meeting link
-     try {
-        const updatedDoc = await getDoc(doc(db, 'bookings', newBooking.id));
-        if (updatedDoc.exists() && updatedDoc.data().meetingLink) {
-            newBooking.meetingLink = updatedDoc.data().meetingLink;
-        }
-     } catch(e) { console.log("Could not find updated meeting link immediately.")}
 
     return newBooking;
   },
@@ -305,6 +242,52 @@ export const firestoreService = {
          return { ...dataToSave, id: newId, link: `/book/${newId}` } as EventType;
      }
   },
+  
+  /**
+   * Deletes a booking and its details from Firestore and triggers deletion in integrated services.
+   */
+  deleteBooking: async (bookingId: string, eventTypeId: string): Promise<void> => {
+    const batch = writeBatch(db);
+
+    const bookingRef = doc(db, 'bookings', bookingId);
+    const detailsRef = doc(db, 'bookingDetails', bookingId);
+
+    batch.delete(bookingRef);
+    batch.delete(detailsRef);
+
+    await batch.commit();
+
+    const appsScriptUrl = config.appsScriptUrl;
+    if (!appsScriptUrl) return;
+
+    try {
+        const eventType = await firestoreService.getEventTypeById(eventTypeId);
+        const payload: { action: string; bookingId: string; sheetId?: string; sheetName?: string } = {
+            action: 'deleteBooking',
+            bookingId: bookingId,
+        };
+
+        if (eventType && eventType.googleSheetConfig?.sheetId) {
+            payload.sheetId = eventType.googleSheetConfig.sheetId;
+            payload.sheetName = eventType.googleSheetConfig.sheetName;
+        }
+        
+        const response = await fetch(appsScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Apps Script error: ${response.statusText} - ${errorText}`);
+        }
+        console.log(`[APPS SCRIPT] Sent delete request for booking ${bookingId}`);
+    } catch (error) {
+        console.error("[APPS SCRIPT] Failed to send delete request:", error);
+        // Don't rethrow, the primary deletion from Firestore succeeded.
+    }
+  },
 
   /**
    * Deletes an event type and all its associated bookings and booking details atomically.
@@ -321,6 +304,9 @@ export const firestoreService = {
         const detailsRef = doc(db, 'bookingDetails', booking.id);
         batch.delete(bookingRef);
         batch.delete(detailsRef);
+        // Note: This does not trigger individual deletions in Google services.
+        // That would require iterating and calling the apps script for each, which could be slow.
+        // The calendar events will remain but the app will no longer see them.
     });
 
     // 3. Add the delete operation for the event type itself
@@ -329,34 +315,5 @@ export const firestoreService = {
 
     // 4. Commit the batch
     await batch.commit();
-  },
-
-  /**
-   * Fetches the column configuration for the Records page.
-   * Returns a default configuration if none is found in Firestore.
-   */
-  getColumnConfiguration: async (): Promise<ColumnConfiguration> => {
-    const docRef = doc(db, 'appConfig', 'columnSettings');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data && Array.isArray(data.config)) {
-             // Merge with predefined to add new columns if they don't exist
-             const savedConfig = data.config as ColumnConfiguration;
-             const savedKeys = new Set(savedConfig.map(c => c.key));
-             const newColumns = PREDEFINED_COLUMNS.filter(c => !savedKeys.has(c.key));
-             return [...savedConfig, ...newColumns];
-        }
-    }
-    // If no config exists, return the default based on predefined fields.
-    return PREDEFINED_COLUMNS;
-  },
-
-  /**
-   * Saves the column configuration for the Records page to Firestore.
-   */
-  saveColumnConfiguration: async (config: ColumnConfiguration): Promise<void> => {
-    const docRef = doc(db, 'appConfig', 'columnSettings');
-    await setDoc(docRef, { config });
   },
 };

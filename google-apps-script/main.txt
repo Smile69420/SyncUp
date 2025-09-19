@@ -28,6 +28,23 @@ function doPost(e) {
         .createTextOutput(JSON.stringify({ status: 'success', message: 'Status update processed.' }))
         .setMimeType(ContentService.MimeType.JSON);
 
+    } else if (data.action === 'deleteBooking') {
+        const { bookingId, sheetId, sheetName } = data;
+        if (!bookingId) {
+            throw new Error("Missing bookingId for deleteBooking action.");
+        }
+
+        console.log(`Received delete request for booking ${bookingId}`);
+        deleteCalendarEvent(bookingId);
+
+        if (sheetId && sheetName) {
+            deleteRowFromSheet(bookingId, sheetId, sheetName);
+        }
+
+        return ContentService
+            .createTextOutput(JSON.stringify({ status: 'success', message: 'Deletion processed.' }))
+            .setMimeType(ContentService.MimeType.JSON);
+
     } else {
       // --- Handle New Booking Creation (Default) ---
       const { eventType, bookingData } = data;
@@ -313,6 +330,70 @@ function getFirebaseService() {
 
   return FirebaseApp.getFirestore(clientEmail, privateKey.replace(/\\n/g, '\n'), projectId);
 }
+
+
+/**
+ * Finds and deletes a Google Calendar event associated with a booking ID.
+ * @param {string} bookingId The booking ID stored in the event's extended properties.
+ */
+function deleteCalendarEvent(bookingId) {
+  try {
+    const events = Calendar.Events.list('primary', {
+      privateExtendedProperty: `syncUpBookingId=${bookingId}`,
+      showDeleted: false
+    }).items;
+
+    if (events && events.length > 0) {
+      events.forEach(function(event) {
+        console.log(`Deleting calendar event: ${event.id} for booking ID: ${bookingId}`);
+        Calendar.Events.remove('primary', event.id);
+      });
+    } else {
+      console.log(`No calendar event found for booking ID: ${bookingId}`);
+    }
+  } catch (err) {
+    console.error(`Error deleting calendar event for booking ${bookingId}: ${err.toString()}`);
+  }
+}
+
+/**
+ * Finds and deletes a row from a Google Sheet based on a booking ID.
+ * @param {string} bookingId The booking ID to find in the 'Booking ID' column.
+ * @param {string} sheetId The ID of the spreadsheet.
+ * @param {string} sheetName The name of the specific sheet/tab.
+ */
+function deleteRowFromSheet(bookingId, sheetId, sheetName) {
+  try {
+    const sheet = SpreadsheetApp.openById(sheetId).getSheetByName(sheetName);
+    if (!sheet) {
+      console.log(`Sheet "${sheetName}" not found. Skipping row deletion.`);
+      return;
+    }
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 1) return;
+
+    const headers = data[0];
+    const bookingIdCol = headers.indexOf('Booking ID');
+    if (bookingIdCol === -1) {
+      console.log('Could not find "Booking ID" column. Skipping row deletion.');
+      return;
+    }
+
+    // Iterate backwards to avoid issues with row indexing after deletion
+    for (let i = data.length - 1; i > 0; i--) {
+      if (data[i][bookingIdCol] == bookingId) {
+        const rowToDelete = i + 1;
+        sheet.deleteRow(rowToDelete);
+        console.log(`Deleted row ${rowToDelete} for booking ID ${bookingId}.`);
+        return; // Assume unique IDs, so we can exit.
+      }
+    }
+    console.log(`Booking ID ${bookingId} not found in sheet for deletion.`);
+  } catch(err) {
+    console.error(`Error deleting row from sheet for booking ${bookingId}: ${err.toString()}`);
+  }
+}
+
 
 
 // --- AUTOMATED REMINDER SYSTEM ---

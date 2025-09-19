@@ -1,12 +1,59 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { firestoreService } from '../services/firestoreService';
-import type { Booking, EventType, BookingDetails, MergedBooking, ColumnConfiguration } from '../types';
+import type { Booking, EventType, BookingDetails, MergedBooking, ColumnConfiguration, ColumnConfig } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import BookingDetailsEditorModal from './BookingDetailsEditorModal';
-import ColumnManagerModal from './ColumnManagerModal';
-import { format, isValid, parseISO, isWithinInterval, subDays } from 'date-fns';
+import DeleteBookingConfirmationModal from './DeleteBookingConfirmationModal';
+import { format, isValid, isWithinInterval, subDays, getWeek, getMonth, getDay } from 'date-fns';
+
+// --- Static Column Configuration ---
+const DEFAULT_COLUMNS: ColumnConfiguration = [
+    { key: 'derivedDate', label: 'Date', isVisible: true },
+    { key: 'companyName', label: 'Company Name', isVisible: true },
+    { key: 'derivedWeekNo', label: 'Week No.', isVisible: true },
+    { key: 'derivedSlot', label: 'Slot', isVisible: true },
+    { key: 'derivedDay', label: 'Day', isVisible: true },
+    { key: 'consultationDoneBy', label: 'Consultation Done By', isVisible: true },
+    { key: 'mode', label: 'Mode', isVisible: true },
+    { key: 'meetingStatus', label: 'Meeting Status', isVisible: true, type: 'select', options: ['Scheduled', 'Completed', 'Cancelled', 'No Show'] },
+    { key: 'derivedMonth', label: 'Month', isVisible: true },
+    { key: 'bookerName', label: 'Client Name', isVisible: true },
+    { key: 'designation', label: 'Designation', isVisible: true },
+    { key: 'generalizedDesignation', label: 'Generalized Designation', isVisible: true },
+    { key: 'bookerPhone', label: 'Phone Number', isVisible: true },
+    { key: 'level', label: 'Level', isVisible: false },
+    { key: 'capability', label: 'Capability', isVisible: false },
+    { key: 'feedbackSent', label: 'Feedback Sent', isVisible: true, type: 'select', options: ['Pending', 'Yes', 'No'] },
+    { key: 'shownInterestInMembership', label: 'Shown Interest in Membership', isVisible: false, type: 'checkbox' },
+    { key: 'membership', label: 'Membership', isVisible: false, type: 'checkbox' },
+    { key: 'membershipVerification', label: 'Membership Verification', isVisible: false, type: 'checkbox' },
+    { key: 'bookerEmail', label: 'Email Id', isVisible: true },
+    { key: 'state', label: 'State', isVisible: false },
+    { key: 'district', label: 'District', isVisible: false },
+    { key: 'womenEntrepreneur', label: 'Women Entrepreneur', isVisible: false, type: 'checkbox' },
+    { key: 'noOfEmployeesInCompany', label: 'No of Employees in Company', isVisible: false },
+    { key: 'noOfAttendants', label: 'No of Attendants', isVisible: false },
+    { key: 'sector', label: 'Sector', isVisible: true },
+    { key: 'sectorGeneralized', label: 'Sector Generalized', isVisible: false },
+    { key: 'operationsPerfomedInBrief', label: 'Operations Perfomed In Brief', isVisible: false, type: 'textarea' },
+    { key: 'scale', label: 'Scale', isVisible: false },
+    { key: 'challenges', label: 'Challenges', isVisible: false, type: 'textarea' },
+    { key: 'manualTasks', label: 'Manual Tasks', isVisible: false, type: 'textarea' },
+    { key: 'suggestedTools', label: 'Suggested Tools', isVisible: false, type: 'textarea' },
+    { key: 'toolCategories', label: 'Tool Categories', isVisible: false },
+    { key: 'aiFamiliarityPre', label: 'AI Familiarity (Pre Consultation)', isVisible: false },
+    { key: 'kpi', label: 'KPI', isVisible: false },
+    { key: 'aiFamiliarityPost', label: 'AI Familiarty Post Consultation', isVisible: false },
+    { key: 'kpiValue', label: 'KPI Value', isVisible: false },
+    { key: 'howDidTheyGetToKnow', label: 'How did they get to know about AI Consultation', isVisible: false },
+    { key: 'additionalNotes1', label: 'Column 35', isVisible: false },
+    { key: 'notesForReport', label: 'Notes for Report', isVisible: true, type: 'textarea' },
+    { key: 'followUpRequestStatus', label: 'Follow Up Request Status', isVisible: false, type: 'select', options: ['Not Requested', 'Requested', 'Completed'] },
+    { key: 'followUpStatus', label: 'Follow Up (Done / Pending )', isVisible: true, type: 'select', options: ['Pending', 'Done'] },
+    { key: 'firefliesLink', label: 'Recording Link', isVisible: false, type: 'url' },
+];
 
 const StatusBadge: React.FC<{ status?: MergedBooking['meetingStatus']}> = ({ status }) => {
     const statusStyles = {
@@ -33,11 +80,11 @@ const DataExplorerPage: React.FC = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [eventTypes, setEventTypes] = useState<EventType[]>([]);
     const [bookingDetails, setBookingDetails] = useState<BookingDetails[]>([]);
-    const [columnConfig, setColumnConfig] = useState<ColumnConfiguration | null>(null);
     const [loading, setLoading] = useState(true);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-    const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
     const [selectedBooking, setSelectedBooking] = useState<MergedBooking | null>(null);
+    const [bookingToDelete, setBookingToDelete] = useState<MergedBooking | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
@@ -49,16 +96,14 @@ const DataExplorerPage: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [books, types, details, config] = await Promise.all([
+            const [books, types, details] = await Promise.all([
                 firestoreService.getBookings(),
                 firestoreService.getEventTypes(),
                 firestoreService.getBookingDetails(),
-                firestoreService.getColumnConfiguration(),
             ]);
             setBookings(books.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
             setEventTypes(types);
             setBookingDetails(details);
-            setColumnConfig(config);
         } catch (error) {
             console.error("Failed to fetch records data:", error);
         } finally {
@@ -145,6 +190,10 @@ const DataExplorerPage: React.FC = () => {
         setSelectedBooking(booking);
         setIsDetailsModalOpen(true);
     };
+
+    const handleDelete = (booking: MergedBooking) => {
+        setBookingToDelete(booking);
+    };
     
     const handleSaveDetails = async (details: BookingDetails) => {
         if (!selectedBooking) return;
@@ -160,21 +209,28 @@ const DataExplorerPage: React.FC = () => {
         }
     };
 
-    const handleSaveColumnConfig = async (newConfig: ColumnConfiguration) => {
+    const handleConfirmDelete = async (bookingId: string, eventTypeId: string) => {
+        setIsDeleting(true);
         try {
-            await firestoreService.saveColumnConfiguration(newConfig);
-            setColumnConfig(newConfig);
-            setIsColumnManagerOpen(false);
-        } catch(error) {
-            console.error("Failed to save column configuration:", error);
-            alert("Could not save column settings. Please try again.");
+            await firestoreService.deleteBooking(bookingId, eventTypeId);
+            setBookingToDelete(null);
+            await fetchData(); // Refresh data
+        } catch (error) {
+            console.error("Failed to delete booking:", error);
+            alert("Could not delete the booking. Please try again.");
+        } finally {
+            setIsDeleting(false);
         }
     };
     
     const getDisplayValue = (item: MergedBooking, key: string): string => {
         try {
-            if (key === 'derivedDate') return isValid(item.startTime) ? format(item.startTime, 'PP') : 'Invalid Date';
-            if (key === 'derivedSlot') return isValid(item.startTime) && isValid(item.endTime) ? `${format(item.startTime, 'p')} - ${format(item.endTime, 'p')}` : 'Invalid Time';
+            const dateValid = item.startTime && isValid(item.startTime);
+            if (key === 'derivedDate') return dateValid ? format(item.startTime, 'PP') : 'Invalid Date';
+            if (key === 'derivedSlot') return dateValid && item.endTime && isValid(item.endTime) ? `${format(item.startTime, 'p')} - ${format(item.endTime, 'p')}` : 'Invalid Time';
+            if (key === 'derivedWeekNo') return dateValid ? String(getWeek(item.startTime)) : 'N/A';
+            if (key === 'derivedMonth') return dateValid ? format(item.startTime, 'MMMM') : 'N/A';
+            if (key === 'derivedDay') return dateValid ? format(item.startTime, 'EEEE') : 'N/A';
             
             const value = (item as any)[key];
             if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -187,9 +243,7 @@ const DataExplorerPage: React.FC = () => {
     };
     
     const handleExportToCSV = () => {
-        if (!columnConfig) return;
-        
-        const visibleColumns = columnConfig.filter(c => c.isVisible);
+        const visibleColumns = DEFAULT_COLUMNS.filter(c => c.isVisible);
         const headers = visibleColumns.map(c => c.label).join(',');
         const rows = filteredData.map(row => {
             return visibleColumns.map(col => {
@@ -209,11 +263,11 @@ const DataExplorerPage: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    if (loading || !columnConfig) {
+    if (loading) {
         return <div className="flex justify-center items-center h-96"><Spinner /></div>;
     }
     
-    const visibleColumns = columnConfig.filter(c => c.isVisible);
+    const visibleColumns = DEFAULT_COLUMNS.filter(c => c.isVisible);
 
     return (
         <div className="space-y-6">
@@ -222,7 +276,6 @@ const DataExplorerPage: React.FC = () => {
             <Card>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                      <input type="text" placeholder="Search by name, email, company..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"/>
-                     {/* Placeholder for multi-selects */}
                      <select onChange={(e) => setSelectedEventTypes(Array.from(e.target.selectedOptions, option => option.value))} multiple className="w-full p-2 border rounded-md">
                         <option value="">All Event Types</option>
                         {eventTypes.map(et => <option key={et.id} value={et.id}>{et.name}</option>)}
@@ -248,17 +301,14 @@ const DataExplorerPage: React.FC = () => {
             
             <Card className="p-0">
                 <div className="flex justify-end p-4 border-b">
-                    <div className="flex items-center gap-4">
-                        <Button variant="outline" onClick={() => setIsColumnManagerOpen(true)}>Manage Columns</Button>
-                        <Button onClick={handleExportToCSV}>Export CSV</Button>
-                    </div>
+                     <Button onClick={handleExportToCSV}>Export CSV</Button>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
                     {filteredData.length > 0 ? (
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
-                                    <th scope="col" className="sticky left-0 bg-slate-50 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider z-10">Details</th>
+                                    <th scope="col" className="sticky left-0 bg-slate-50 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider z-10">Actions</th>
                                     {visibleColumns.map(col => (
                                         <th key={col.key as string} scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{col.label}</th>
                                     ))}
@@ -268,7 +318,12 @@ const DataExplorerPage: React.FC = () => {
                                 {filteredData.map(item => (
                                     <tr key={item.id} className="hover:bg-slate-50">
                                         <td className="sticky left-0 bg-white hover:bg-slate-50 px-6 py-4 whitespace-nowrap text-sm font-medium z-10 border-r">
-                                            <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>View</Button>
+                                            <div className="flex items-center gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>View</Button>
+                                                <button onClick={() => handleDelete(item)} disabled={isDeleting} className="p-1.5 text-slate-400 hover:text-red-600 rounded-md hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Delete booking">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                                                </button>
+                                            </div>
                                         </td>
                                         {visibleColumns.map(col => (
                                             <td key={col.key as string} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 max-w-xs truncate" title={getDisplayValue(item, col.key as string)}>
@@ -302,11 +357,12 @@ const DataExplorerPage: React.FC = () => {
                 />
             )}
             
-            {isColumnManagerOpen && columnConfig && (
-                <ColumnManagerModal
-                    initialConfig={columnConfig}
-                    onClose={() => setIsColumnManagerOpen(false)}
-                    onSave={handleSaveColumnConfig}
+            {bookingToDelete && (
+                <DeleteBookingConfirmationModal
+                    booking={bookingToDelete}
+                    onClose={() => setBookingToDelete(null)}
+                    onConfirm={handleConfirmDelete}
+                    isDeleting={isDeleting}
                 />
             )}
         </div>

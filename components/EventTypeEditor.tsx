@@ -581,7 +581,192 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                 <div className="mt-8 pt-6 border-t border-red-200">
                                     <h3 className="text-lg font-semibold text-red-700">Danger Zone</h3>
                                     <p className="text-sm text-slate-600 mt-1 mb-4">
-                                        Deleting this event type cannot be undone. All existing bookings for this event type will be preserved, but you will no longer be able to accept new bookings for it.
+                                        Deleting this event type cannot be undone. All existing bookings for this event type will also be permanently deleted.
                                     </p>
                                     <Button variant="outline" onClick={handleDeleteClick} className="!border-red-500 !text-red-600 hover:!bg-red-50">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                                        Delete Event Type
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {activeTab === 'availability' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <PresetSelector label="Minimum Scheduling Notice" value={minimumSchedulingNotice} onChange={setMinimumSchedulingNotice} options={noticeOptions} unit="minutes" inputClasses={inputClasses} />
+                                <PresetSelector label="Booking Horizon" value={bookingHorizonDays} onChange={setBookingHorizonDays} options={horizonOptions} unit="days" inputClasses={inputClasses} />
+                                <PresetSelector label="Buffer Before Event" value={bufferBefore} onChange={setBufferBefore} options={bufferOptions} unit="minutes" inputClasses={inputClasses} />
+                                <PresetSelector label="Buffer After Event" value={bufferAfter} onChange={setBufferAfter} options={bufferOptions} unit="minutes" inputClasses={inputClasses} />
+                            </div>
+
+                             <div className="pt-4">
+                                <h3 className="text-lg font-semibold">Weekly Availability</h3>
+                                <p className="text-sm text-slate-600">Set the hours you’re available for this event type.</p>
+                                <div className="space-y-3 mt-4">
+                                    {weekDays.map((day, index) => {
+                                        const isEnabled = availability.some(rule => rule.dayOfWeek === index);
+                                        const rule = availability.find(r => r.dayOfWeek === index);
+                                        return (
+                                            <div key={day} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+                                                <div className="flex items-center">
+                                                    <input type="checkbox" checked={isEnabled} onChange={() => toggleDayAvailability(index)} className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"/>
+                                                    <label className="ml-2 font-medium">{day}</label>
+                                                </div>
+                                                {isEnabled ? (
+                                                    <div className="col-span-3 flex items-center gap-2">
+                                                        <Select value={rule?.startTime} onChange={e => handleAvailabilityChange(index, 'startTime', e.target.value)} className="w-full">
+                                                            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                                        </Select>
+                                                        <span>-</span>
+                                                        <Select value={rule?.endTime} onChange={e => handleAvailabilityChange(index, 'endTime', e.target.value)} className="w-full">
+                                                            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                                        </Select>
+                                                    </div>
+                                                ) : (
+                                                    <div className="col-span-3 text-sm text-slate-500">Unavailable</div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            
+                            <div className="pt-4">
+                                <h3 className="text-lg font-semibold">Weekly Unavailability</h3>
+                                <p className="text-sm text-slate-600">Block out specific recurring times (e.g., lunch breaks).</p>
+                                 <div className="space-y-3 mt-4">
+                                     {unavailability.map((slot, index) => (
+                                         <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+                                             <Select value={slot.dayOfWeek} onChange={e => handleUnavailabilityChange(index, 'dayOfWeek', parseInt(e.target.value))} className="md:col-span-1">
+                                                {weekDays.map((day, dIndex) => <option key={dIndex} value={dIndex}>{day}</option>)}
+                                             </Select>
+                                             <div className="md:col-span-2 flex items-center gap-2">
+                                                 <Select value={slot.startTime} onChange={e => handleUnavailabilityChange(index, 'startTime', e.target.value)} className="w-full">
+                                                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                                 </Select>
+                                                 <span>-</span>
+                                                 <Select value={slot.endTime} onChange={e => handleUnavailabilityChange(index, 'endTime', e.target.value)} className="w-full">
+                                                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                                 </Select>
+                                             </div>
+                                             <Button variant="outline" size="sm" onClick={() => removeUnavailabilitySlot(index)}>Remove</Button>
+                                         </div>
+                                     ))}
+                                 </div>
+                                <Button onClick={addUnavailabilitySlot} className="mt-2">+ Add Slot</Button>
+                            </div>
+                            
+                             <div className="pt-4">
+                                <h3 className="text-lg font-semibold">Date Overrides</h3>
+                                <p className="text-sm text-slate-600">Block off specific dates for this event type.</p>
+                                <div className="space-y-3 mt-4">
+                                     {unavailableDates.map((override, index) => (
+                                         <div key={index} className="p-3 bg-slate-50 rounded-md border">
+                                            <div className="flex items-center justify-between">
+                                                <input type="date" value={override.date} onChange={e => handleDateOverrideChange(index, e.target.value)} className={inputClasses + " w-auto"}/>
+                                                <Button variant="outline" size="sm" onClick={() => removeDateOverride(index)}>Remove</Button>
+                                            </div>
+                                             <div className="flex items-center mt-3">
+                                                 <input type="checkbox" id={`all-day-${index}`} checked={override.timeRanges.length === 0} onChange={() => toggleDateOverrideAllDay(index)} className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"/>
+                                                 <label htmlFor={`all-day-${index}`} className="ml-2 text-sm font-medium">Block off all day</label>
+                                             </div>
+                                             {override.timeRanges.length > 0 && (
+                                                <div className="flex items-center gap-2 mt-2">
+                                                     <Select value={override.timeRanges[0].startTime} onChange={e => handleDateOverrideTimeChange(index, 'startTime', e.target.value)} className="w-full">
+                                                        {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                                     </Select>
+                                                     <span>-</span>
+                                                     <Select value={override.timeRanges[0].endTime} onChange={e => handleDateOverrideTimeChange(index, 'endTime', e.target.value)} className="w-full">
+                                                        {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                                     </Select>
+                                                </div>
+                                             )}
+                                         </div>
+                                     ))}
+                                </div>
+                                 <Button onClick={addDateOverride} className="mt-2">+ Add Override</Button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {activeTab === 'questions' && (
+                        <div className="space-y-4 animate-fade-in">
+                             <h3 className="text-lg font-semibold">Custom Questions</h3>
+                             <p className="text-sm text-slate-600">Add questions to your booking form.</p>
+                             <div className="space-y-4">
+                                {customFormFields.map((field, index) => (
+                                    <div key={field.id} className="p-4 border rounded-lg bg-slate-50">
+                                         <div className="flex justify-between items-start">
+                                            <div className="flex-grow pr-4">
+                                                <label className="block text-sm font-medium text-slate-700">Question {index + 1}</label>
+                                                <input type="text" value={field.label} onChange={e => updateFormField(field.id, 'label', e.target.value)} className={inputClasses} />
+                                            </div>
+                                            <Button variant="outline" size="sm" onClick={() => removeFormField(field.id)}>Delete</Button>
+                                        </div>
+                                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                            <Select value={field.type} onChange={e => updateFormField(field.id, 'type', e.target.value)}>
+                                                <option value="text">Text Input</option>
+                                                <option value="textarea">Text Area</option>
+                                                <option value="email">Email</option>
+                                                <option value="select">Dropdown</option>
+                                                <option value="radio">Radio Buttons</option>
+                                                <option value="checkbox">Checkbox</option>
+                                            </Select>
+                                            <div className="flex items-center">
+                                                <input type="checkbox" id={`req-${field.id}`} checked={field.required} onChange={e => updateFormField(field.id, 'required', e.target.checked)} className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"/>
+                                                <label htmlFor={`req-${field.id}`} className="ml-2 text-sm font-medium">Required</label>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-slate-700">Link to Record Field</label>
+                                                <Select value={field.linkedRecordField || ''} onChange={e => updateFormField(field.id, 'linkedRecordField', e.target.value)}>
+                                                    <option value="">None</option>
+                                                    {bookingDetailsFields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                                                </Select>
+                                                <p className="text-xs text-slate-500 mt-1">Automatically save this answer to a specific field in the Data Explorer.</p>
+                                            </div>
+                                        </div>
+                                        {(field.type === 'select' || field.type === 'radio') && (
+                                            <div className="mt-3">
+                                                <label className="block text-sm font-medium text-slate-700">Options</label>
+                                                <div className="space-y-2 mt-1">
+                                                    {(field.options || []).map((option, optIndex) => (
+                                                        <div key={optIndex} className="flex items-center gap-2">
+                                                            <input type="text" value={option} onChange={e => handleOptionChange(field.id, optIndex, e.target.value)} className={`${inputClasses} flex-grow`} />
+                                                            <button onClick={() => removeOption(field.id, optIndex)} className="text-slate-400 hover:text-red-500">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <Button size="sm" variant="outline" onClick={() => addOption(field.id)} className="mt-2">+ Add Option</Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                             </div>
+                             <Button onClick={addFormField}>+ Add New Question</Button>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                <Button onClick={handleSaveClick}>Save</Button>
+            </div>
+        </Modal>
+
+        {isDeleteModalOpen && eventType && (
+             <DeleteConfirmationModal
+                eventType={eventType}
+                associatedBookings={bookingsToDelete}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirmDelete={handleConfirmDelete}
+            />
+        )}
+        </>
+    );
+};
+
+export default EventTypeEditor;
