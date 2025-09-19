@@ -80,7 +80,7 @@ const Calendar: React.FC<{
 
                     const isDisabled = isPast || !isCurrentMonth || !hasAvailability || isBeyondHorizon;
                     
-                    let dayClassName = 'w-10 h-10 flex items-center justify-center rounded-full transition-colors font-medium';
+                    let dayClassName = 'w-10 h-10 flex items-center justify-center rounded-full transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary/50';
                     
                     if (isDisabled) {
                         dayClassName += isCurrentMonth ? ' text-slate-400 cursor-not-allowed' : ' text-slate-300 cursor-not-allowed';
@@ -89,11 +89,11 @@ const Calendar: React.FC<{
                     }
                     
                     if (isSelected) {
-                         dayClassName = 'w-10 h-10 flex items-center justify-center rounded-full transition-colors font-medium bg-primary text-white hover:bg-primary/90';
+                         dayClassName = 'w-10 h-10 flex items-center justify-center rounded-full transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary/50 bg-primary text-white hover:bg-primary/90';
                     }
                     
-                    if (isToday(day) && !isSelected) {
-                        dayClassName += ' ring-2 ring-primary';
+                    if (isToday(day) && !isSelected && !isDisabled) {
+                        dayClassName += ' ring-2 ring-primary/50';
                     }
 
                     return (
@@ -523,7 +523,7 @@ const BookingPage: React.FC = () => {
     if (!eventType) return <div className="text-center text-red-500 p-8">Event type not found.</div>;
     
     return (
-        <div className="min-h-screen bg-white md:bg-background flex justify-center items-center p-0 md:p-4">
+        <div className="min-h-screen bg-white md:bg-transparent flex justify-center items-center p-0 md:p-4">
             <div className="w-full max-w-4xl bg-card p-4 sm:p-6 md:p-8 rounded-none md:rounded-lg md:shadow-xl grid grid-cols-1 md:grid-cols-3 gap-8">
                 <LeftPanel eventType={eventType} timeZone={timeZone} />
                 

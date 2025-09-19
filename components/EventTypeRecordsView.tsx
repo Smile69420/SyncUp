@@ -166,7 +166,7 @@ const EventTypeRecordsView: React.FC<EventTypeRecordsViewProps> = ({ eventType, 
     if (loading) return <div className="flex justify-center items-center h-96"><Spinner /></div>;
     
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
             <div className="flex items-center gap-4">
                 <Button variant="outline" onClick={onBack}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
@@ -186,7 +186,7 @@ const EventTypeRecordsView: React.FC<EventTypeRecordsViewProps> = ({ eventType, 
                 hideEventTypeFilter={true}
             />
             
-            <Card className="p-0">
+            <Card className="!p-0 overflow-hidden">
                 <div className="overflow-x-auto custom-scrollbar">
                     {filteredData.length > 0 ? (
                         <table className="min-w-full divide-y divide-slate-200">

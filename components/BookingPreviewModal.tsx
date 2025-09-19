@@ -159,7 +159,7 @@ Team MCCIA`;
                         </Button>
                     </div>
                 </div>
-                <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                <div className="flex justify-end space-x-3 pt-6 mt-4 border-t border-slate-200">
                     <Button variant="outline" onClick={onClose}>Close</Button>
                     <Button onClick={onInitiateReschedule}>Reschedule</Button>
                 </div>

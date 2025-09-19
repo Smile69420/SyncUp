@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
@@ -16,7 +17,7 @@ import RescheduleModal from './RescheduleModal';
 import TodaysMeetingsModal from './TodaysMeetingsModal';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode, onClick?: () => void, isClickable?: boolean }> = ({ title, value, icon, onClick, isClickable }) => (
-    <Card className={`flex items-center p-4 ${isClickable ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''}`} onClick={onClick}>
+    <Card className={`flex items-center p-4 transition-all transform hover:-translate-y-1 ${isClickable ? 'cursor-pointer hover:bg-slate-50' : ''}`} onClick={onClick}>
         <div className="p-3 rounded-full bg-primary/10 text-primary mr-4">{icon}</div>
         <div>
             <p className="text-sm text-gray-500">{title}</p>
@@ -207,12 +208,12 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="space-y-8">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center animate-fade-in">
                 <h1 className="text-3xl font-bold">Dashboard</h1>
                 <Button onClick={handleAddNewEventType}>+ Create Event Type</Button>
             </div>
 
-            <section>
+            <section className="animate-fade-in" style={{ animationDelay: '100ms' }}>
                  <h2 className="text-2xl font-semibold mb-4">Action Center</h2>
                  <Card>
                     <div className="flex items-center mb-4">
@@ -244,7 +245,7 @@ const Dashboard: React.FC = () => {
                  </Card>
             </section>
             
-             <section>
+             <section className="animate-fade-in" style={{ animationDelay: '200ms' }}>
                 <h2 className="text-2xl font-semibold mb-4">At a Glance</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                      <StatCard title="Upcoming (Next 7 days)" value={dashboardStats.upcomingBookings.toString()} icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>} />
@@ -260,7 +261,7 @@ const Dashboard: React.FC = () => {
                 </div>
             </section>
             
-            <section>
+            <section className="animate-fade-in" style={{ animationDelay: '300ms' }}>
                 <h2 className="text-2xl font-semibold mb-4">Event Types</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {eventTypes.map(et => (
@@ -287,7 +288,7 @@ const Dashboard: React.FC = () => {
                 </div>
             </section>
             
-            <section>
+            <section className="animate-fade-in" style={{ animationDelay: '400ms' }}>
                 <h2 className="text-2xl font-semibold mb-4">Your Schedule</h2>
                 <Card>
                     <CalendarView 

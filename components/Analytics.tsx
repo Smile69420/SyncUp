@@ -54,11 +54,11 @@ const renderActiveShape = (props: any) => {
 };
 
 const KpiCard: React.FC<{ title: string; value: string | number; description?: string }> = ({ title, value, description }) => (
-    <div className="bg-slate-50 p-4 rounded-lg">
+    <Card className="!p-4">
         <p className="text-sm text-slate-500 font-medium">{title}</p>
         <p className="text-3xl font-bold text-primary mt-1">{value}</p>
         {description && <p className="text-xs text-slate-400 mt-1">{description}</p>}
-    </div>
+    </Card>
 );
 
 const Analytics: React.FC = () => {
@@ -172,7 +172,7 @@ const Analytics: React.FC = () => {
 
     return (
         <div className="container mx-auto space-y-8">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
                 <h1 className="text-3xl font-bold">Analytics</h1>
                 <div className="w-full md:w-auto">
                     <Select value={dateRange} onChange={e => setDateRange(e.target.value)} className="w-full md:w-48">
@@ -184,14 +184,14 @@ const Analytics: React.FC = () => {
                 </div>
             </div>
 
-             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-fade-in" style={{ animationDelay: '100ms' }}>
                 <KpiCard title="Total Bookings" value={analyticsData.totalBookings} description="Based on current filters" />
                 <KpiCard title="Completion Rate" value={analyticsData.completionRate} description="Completed / (Completed + No Shows)" />
                 <KpiCard title="Meetings Completed" value={analyticsData.completedMeetings} />
                 <KpiCard title="Follow-ups Done" value={analyticsData.followUpsDone} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in" style={{ animationDelay: '200ms' }}>
                  <Card>
                     <h2 className="text-xl font-semibold mb-4">Meeting Status Breakdown</h2>
                     <div className="h-80">
@@ -226,7 +226,7 @@ const Analytics: React.FC = () => {
                 </Card>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in" style={{ animationDelay: '300ms' }}>
                 <Card>
                     <h2 className="text-xl font-semibold mb-4">Bookings by Event Type</h2>
                      <div className="h-80">

@@ -51,7 +51,7 @@ const RecordsPage: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
             <h1 className="text-3xl font-bold">Data Explorer</h1>
             <p className="text-slate-600">Select an event type below to view its records.</p>
             
@@ -60,7 +60,7 @@ const RecordsPage: React.FC = () => {
                     {eventTypes.map(et => (
                         <Card 
                             key={et.id} 
-                            className="flex flex-col !p-0 overflow-hidden cursor-pointer transition-transform transform hover:-translate-y-1"
+                            className="flex flex-col !p-0 overflow-hidden cursor-pointer"
                             onClick={() => setSelectedEventType(et)}
                         >
                             <div className="p-5 flex-grow">
