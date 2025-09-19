@@ -1,5 +1,5 @@
-import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, ColumnConfiguration } from '../types';
-import { addMinutes } from 'date-fns';
+import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, MergedBooking } from '../types';
+import { addMinutes, isWithinInterval, subDays } from 'date-fns';
 import { db } from './firebaseService';
 import {
     collection,
@@ -20,104 +20,57 @@ import { config } from '../config';
 // --- SERVICE LOGIC using Firebase Firestore ---
 
 export const firestoreService = {
-  /**
-   * Fetches event types from the Firestore database.
-   */
   getEventTypes: async (): Promise<EventType[]> => {
     const eventTypesCollection = collection(db, 'eventTypes');
     const querySnapshot = await getDocs(eventTypesCollection);
     return querySnapshot.docs.map(doc => {
         const data = doc.data() as Omit<EventType, 'id' | 'link'>;
-        return {
-            id: doc.id,
-            ...data,
-            link: `/book/${doc.id}`,
-        } as EventType;
+        return { id: doc.id, ...data, link: `/book/${doc.id}` } as EventType;
     });
   },
 
-  /**
-   * Fetches a single event type by its ID from Firestore.
-   */
   getEventTypeById: async (id: string): Promise<EventType | undefined> => {
      const docRef = doc(db, 'eventTypes', id);
      const docSnap = await getDoc(docRef);
      if (docSnap.exists()) {
         const data = docSnap.data() as Omit<EventType, 'id' | 'link'>;
-        return { 
-            id: docSnap.id, 
-            ...data,
-            link: `/book/${docSnap.id}`,
-        } as EventType;
+        return { id: docSnap.id, ...data, link: `/book/${docSnap.id}` } as EventType;
      }
      return undefined;
   },
   
-  /**
-   * Fetches all bookings from the Firestore database.
-   */
   getBookings: async (): Promise<Booking[]> => {
     const bookingsCollection = collection(db, 'bookings');
     const querySnapshot = await getDocs(bookingsCollection);
     return querySnapshot.docs.map(doc => {
         const data = doc.data() as BookingDocument;
-        return {
-            id: doc.id,
-            ...data,
-            startTime: data.startTime.toDate(),
-            endTime: data.endTime.toDate(),
-        };
+        return { id: doc.id, ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() };
     });
   },
 
-  /**
-   * Fetches all bookings associated with a specific event type.
-   */
   getBookingsForEventType: async (eventTypeId: string): Promise<Booking[]> => {
-    const bookingsCollection = collection(db, 'bookings');
-    const q = query(bookingsCollection, where("eventTypeId", "==", eventTypeId));
+    const q = query(collection(db, 'bookings'), where("eventTypeId", "==", eventTypeId));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
         const data = doc.data() as BookingDocument;
-        return {
-            id: doc.id,
-            ...data,
-            startTime: data.startTime.toDate(),
-            endTime: data.endTime.toDate(),
-        };
+        return { id: doc.id, ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() };
     });
   },
 
-  /**
-   * Fetches all booking details from Firestore.
-   */
   getBookingDetails: async (): Promise<BookingDetails[]> => {
     const detailsCollection = collection(db, 'bookingDetails');
     const querySnapshot = await getDocs(detailsCollection);
-    return querySnapshot.docs.map(doc => {
-        const data = doc.data() as BookingDetailsDocument;
-        return {
-            id: doc.id,
-            ...data
-        } as BookingDetails;
-    });
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BookingDetails));
   },
 
-  /**
-   * Updates a booking details document in Firestore and syncs status changes to Google Sheets.
-   */
   updateBookingDetails: async (bookingId: string, data: Partial<BookingDetailsDocument>, eventTypeId?: string): Promise<void> => {
     const docRef = doc(db, 'bookingDetails', bookingId);
     await updateDoc(docRef, data);
 
-    // If meetingStatus was updated, sync to Google Sheet
-    if (data.meetingStatus && eventTypeId) {
-        const appsScriptUrl = config.appsScriptUrl;
-        if (!appsScriptUrl) return;
-
+    if (data.meetingStatus && eventTypeId && config.appsScriptUrl) {
         try {
             const eventType = await firestoreService.getEventTypeById(eventTypeId);
-            if (eventType && eventType.googleSheetConfig?.sheetId && eventType.googleSheetConfig?.sheetName) {
+            if (eventType?.googleSheetConfig) {
                 const payload = {
                     action: 'updateStatus',
                     bookingId: bookingId,
@@ -125,167 +78,113 @@ export const firestoreService = {
                     sheetId: eventType.googleSheetConfig.sheetId,
                     sheetName: eventType.googleSheetConfig.sheetName,
                 };
-
-                const response = await fetch(appsScriptUrl, {
+                const response = await fetch(config.appsScriptUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(payload)
                 });
-                
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`Apps Script error: ${response.statusText} - ${errorText}`);
+                    console.error(`[APPS SCRIPT DIAGNOSTICS] URL: ${config.appsScriptUrl}, Status: ${response.status}, Response: ${errorText}`);
+                    throw new Error(`Google Sheets status update failed. See console for details.`);
                 }
                 console.log(`[APPS SCRIPT] Sent status update for booking ${bookingId}`);
             }
         } catch (error) {
-            console.error("[APPS SCRIPT] Failed to send status update:", error);
+            console.error("[APPS SCRIPT] Critical error during status update:", error);
+            throw error;
         }
     }
   },
 
-  /**
-   * Creates a new booking in Firestore and triggers server-side Google integrations.
-   */
   createBooking: async (bookingData: Omit<Booking, 'id' | 'endTime'>): Promise<Booking> => {
     const eventType = await firestoreService.getEventTypeById(bookingData.eventTypeId);
-    if (!eventType) {
-      throw new Error("Event type not found");
-    }
+    if (!eventType) throw new Error("Event type not found");
     
     const endTime = addMinutes(bookingData.startTime, eventType.duration);
-
-    const bookingToCreate = {
-        ...bookingData,
-        endTime: endTime,
-    };
+    const bookingToCreate = { ...bookingData, endTime };
     
     const docRef = await addDoc(collection(db, 'bookings'), bookingToCreate);
-    
-    const initialDetails: BookingDetailsDocument = {
-      meetingStatus: 'Scheduled',
-      customFields: {},
-    };
+    const newBookingId = docRef.id;
 
-    // Sync custom form answers to specific record fields if linked
+    const initialDetails: BookingDetailsDocument = { meetingStatus: 'Scheduled' };
     eventType.customFormFields.forEach(field => {
         if (field.linkedRecordField && bookingData.customAnswers?.[field.id]) {
             const value = bookingData.customAnswers[field.id];
-            if (field.type === 'checkbox') {
-                 (initialDetails as any)[field.linkedRecordField] = value === 'true';
-            } else {
-                 (initialDetails as any)[field.linkedRecordField] = value;
-            }
+            (initialDetails as any)[field.linkedRecordField] = field.type === 'checkbox' ? value === 'true' : value;
         }
     });
+    await setDoc(doc(db, 'bookingDetails', newBookingId), initialDetails);
 
-    await setDoc(doc(db, 'bookingDetails', docRef.id), initialDetails);
+    let newBooking: Booking = { ...bookingToCreate, id: newBookingId };
 
-    let newBooking: Booking = {
-        ...bookingToCreate,
-        id: docRef.id,
-    };
-
-    // --- SERVER-SIDE INTEGRATIONS VIA GOOGLE APPS SCRIPT ---
-    const appsScriptUrl = config.appsScriptUrl;
-    if (appsScriptUrl && (eventType.googleSheetConfig?.sheetId || (eventType.mode === 'online' && eventType.conferencing?.provider === 'google-meet'))) {
+    if (config.appsScriptUrl && (eventType.googleSheetConfig || eventType.mode === 'online')) {
         console.log(`[APPS SCRIPT] Sending booking data...`);
-
-        const bookingPayload = { ...newBooking };
-        
         try {
-            const response = await fetch(appsScriptUrl, {
+            const response = await fetch(config.appsScriptUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8',
-                },
-                body: JSON.stringify({ eventType, bookingData: bookingPayload })
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ eventType, bookingData: { ...newBooking } })
             });
-
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Apps Script error: ${response.statusText} - ${errorText}`);
+                console.error(`[APPS SCRIPT DIAGNOSTICS] URL: ${config.appsScriptUrl}, Status: ${response.status}, Response: ${errorText}`);
+                throw new Error(`Google service integration failed. See console for details.`);
             }
-
             const responseData = await response.json();
             console.log('[APPS SCRIPT] Response received:', responseData);
-
             if (responseData.status === 'success' && responseData.meetingLink) {
                 newBooking.meetingLink = responseData.meetingLink;
             }
         } catch (error) {
-            console.error("[APPS SCRIPT] Error calling Google Apps Script:", error);
-            // Let the user know the booking was made but integration might have failed.
-            alert("Your booking was successful, but there was an issue with a Google integration (Calendar or Sheets). Please check your email for a confirmation. Error: " + (error as Error).message);
+            console.error("[APPS SCRIPT] Critical error calling Google Apps Script:", error);
+            alert("Booking successful, but Google integration failed. Please check your email for confirmation. Error: " + (error as Error).message);
         }
     }
-
     return newBooking;
   },
 
-  /**
-   * Saves an event type (creates or updates) to Firestore.
-   */
   saveEventType: async (eventTypeData: Omit<EventType, 'id' | 'link'> & { id?: string }): Promise<EventType> => {
      const dataToSave = JSON.parse(JSON.stringify(eventTypeData));
-
      if (dataToSave.id) {
-         const docId = dataToSave.id;
-         const docRef = doc(db, 'eventTypes', docId);
-         delete dataToSave.id;
-         await setDoc(docRef, dataToSave, { merge: true });
-         return { ...dataToSave, id: docId, link: `/book/${docId}` } as EventType;
+         const { id, ...rest } = dataToSave;
+         await setDoc(doc(db, 'eventTypes', id), rest, { merge: true });
+         return { ...rest, id, link: `/book/${id}` } as EventType;
      } else {
-         const newDocRef = doc(collection(db, 'eventTypes'));
-         const newId = newDocRef.id;
-         await setDoc(newDocRef, dataToSave);
-         return { ...dataToSave, id: newId, link: `/book/${newId}` } as EventType;
+         const newDocRef = await addDoc(collection(db, 'eventTypes'), dataToSave);
+         return { ...dataToSave, id: newDocRef.id, link: `/book/${newDocRef.id}` } as EventType;
      }
   },
   
-  /**
-   * Deletes a booking and its details from Firestore and triggers deletion in integrated services.
-   */
   deleteBooking: async (bookingId: string, eventTypeId: string): Promise<void> => {
     const batch = writeBatch(db);
-
-    const bookingRef = doc(db, 'bookings', bookingId);
-    const detailsRef = doc(db, 'bookingDetails', bookingId);
-
-    batch.delete(bookingRef);
-    batch.delete(detailsRef);
-
+    batch.delete(doc(db, 'bookings', bookingId));
+    batch.delete(doc(db, 'bookingDetails', bookingId));
     await batch.commit();
 
-    const appsScriptUrl = config.appsScriptUrl;
-    if (!appsScriptUrl) return;
-
+    if (!config.appsScriptUrl) return;
     try {
         const eventType = await firestoreService.getEventTypeById(eventTypeId);
-        const payload: { action: string; bookingId: string; sheetId?: string; sheetName?: string } = {
+        const payload = {
             action: 'deleteBooking',
-            bookingId: bookingId,
+            bookingId,
+            sheetId: eventType?.googleSheetConfig?.sheetId,
+            sheetName: eventType?.googleSheetConfig?.sheetName,
         };
-
-        if (eventType && eventType.googleSheetConfig?.sheetId) {
-            payload.sheetId = eventType.googleSheetConfig.sheetId;
-            payload.sheetName = eventType.googleSheetConfig.sheetName;
-        }
-        
-        const response = await fetch(appsScriptUrl, {
+        const response = await fetch(config.appsScriptUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
         });
-
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Apps Script error: ${response.statusText} - ${errorText}`);
+            console.error(`[APPS SCRIPT DIAGNOSTICS] URL: ${config.appsScriptUrl}, Status: ${response.status}, Response: ${errorText}`);
+            throw new Error(`Google service delete failed. See console for details.`);
         }
         console.log(`[APPS SCRIPT] Sent delete request for booking ${bookingId}`);
     } catch (error) {
-        console.error("[APPS SCRIPT] Failed to send delete request:", error);
-        // Don't rethrow, the primary deletion from Firestore succeeded.
+        console.error("[APPS SCRIPT] Critical error during delete:", error);
+        throw error;
     }
   },
 
@@ -297,13 +196,10 @@ export const firestoreService = {
     });
     await batch.commit();
 
-    const appsScriptUrl = config.appsScriptUrl;
-    if (!appsScriptUrl) return;
-
+    if (!config.appsScriptUrl) return;
     try {
         const allEventTypes = await firestoreService.getEventTypes();
         const eventTypeMap = new Map(allEventTypes.map(et => [et.id, et]));
-
         const payload = {
             action: 'deleteMultipleBookings',
             bookings: bookingIds.map(id => {
@@ -316,19 +212,19 @@ export const firestoreService = {
                 };
             }),
         };
-        
-        const response = await fetch(appsScriptUrl, {
+        const response = await fetch(config.appsScriptUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
         });
-
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Apps Script error on multi-delete: ${response.statusText} - ${errorText}`);
+            console.error(`[APPS SCRIPT DIAGNOSTICS] URL: ${config.appsScriptUrl}, Status: ${response.status}, Response: ${errorText}`);
+            throw new Error(`Google service multi-delete failed. See console for details.`);
         }
     } catch (error) {
-        console.error("[APPS SCRIPT] Failed to send multi-delete request:", error);
+        console.error("[APPS SCRIPT] Critical error during multi-delete:", error);
+        throw error;
     }
 },
 
@@ -337,16 +233,9 @@ export const firestoreService = {
     if (!eventType) throw new Error("Event type not found for rescheduling.");
 
     const newEndTime = addMinutes(newStartTime, eventType.duration);
-
-    const bookingRef = doc(db, 'bookings', bookingId);
-    await updateDoc(bookingRef, {
-        startTime: newStartTime,
-        endTime: newEndTime
-    });
+    await updateDoc(doc(db, 'bookings', bookingId), { startTime: newStartTime, endTime: newEndTime });
     
-    const appsScriptUrl = config.appsScriptUrl;
-    if (!appsScriptUrl) return;
-
+    if (!config.appsScriptUrl) return;
     try {
         const payload = {
             action: 'rescheduleBooking',
@@ -356,47 +245,62 @@ export const firestoreService = {
             sheetId: eventType.googleSheetConfig?.sheetId,
             sheetName: eventType.googleSheetConfig?.sheetName,
         };
-
-        const response = await fetch(appsScriptUrl, {
+        const response = await fetch(config.appsScriptUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
         });
-
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Apps Script reschedule error: ${response.statusText} - ${errorText}`);
+            console.error(`[APPS SCRIPT DIAGNOSTICS] URL: ${config.appsScriptUrl}, Status: ${response.status}, Response: ${errorText}`);
+            throw new Error(`Google service reschedule failed. See console for details.`);
         }
     } catch (error) {
-        console.error("[APPS SCRIPT] Failed to send reschedule request:", error);
+        console.error("[APPS SCRIPT] Critical error during reschedule:", error);
+        throw error;
     }
 },
 
-  /**
-   * Deletes an event type and all its associated bookings and booking details atomically.
-   */
   deleteEventTypeAndBookings: async (eventTypeId: string): Promise<void> => {
     const batch = writeBatch(db);
-
-    // 1. Find all associated bookings
     const associatedBookings = await firestoreService.getBookingsForEventType(eventTypeId);
 
-    // 2. Add delete operations for each booking and its details to the batch
     associatedBookings.forEach(booking => {
-        const bookingRef = doc(db, 'bookings', booking.id);
-        const detailsRef = doc(db, 'bookingDetails', booking.id);
-        batch.delete(bookingRef);
-        batch.delete(detailsRef);
-        // Note: This does not trigger individual deletions in Google services.
-        // That would require iterating and calling the apps script for each, which could be slow.
-        // The calendar events will remain but the app will no longer see them.
+        batch.delete(doc(db, 'bookings', booking.id));
+        batch.delete(doc(db, 'bookingDetails', booking.id));
     });
 
-    // 3. Add the delete operation for the event type itself
-    const eventTypeRef = doc(db, 'eventTypes', eventTypeId);
-    batch.delete(eventTypeRef);
-
-    // 4. Commit the batch
+    batch.delete(doc(db, 'eventTypes', eventTypeId));
     await batch.commit();
+  },
+  
+  filterBookings: (bookings: MergedBooking[], filters: any): MergedBooking[] => {
+    let data = bookings;
+    const { dateRange, searchQuery, eventTypes, statuses } = filters;
+
+    if (dateRange !== 'all') {
+        const now = new Date();
+        const rangeStart = subDays(now, parseInt(dateRange));
+        data = data.filter(item => isWithinInterval(item.startTime, { start: rangeStart, end: now }));
+    }
+
+    if (searchQuery) {
+        const lowercasedQuery = searchQuery.toLowerCase();
+        data = data.filter(item =>
+            item.bookerName?.toLowerCase().includes(lowercasedQuery) ||
+            item.bookerEmail?.toLowerCase().includes(lowercasedQuery) ||
+            item.companyName?.toLowerCase().includes(lowercasedQuery)
+        );
+    }
+
+    if (eventTypes.length > 0) {
+        data = data.filter(item => eventTypes.includes(item.eventTypeId));
+    }
+
+    if (statuses.length > 0) {
+        data = data.filter(item => statuses.includes(item.meetingStatus || 'Scheduled'));
+    }
+
+    return data;
   },
 };

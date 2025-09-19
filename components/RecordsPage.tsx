@@ -1,59 +1,28 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { firestoreService } from '../services/firestoreService';
-import type { Booking, EventType, BookingDetails, MergedBooking, ColumnConfiguration, ColumnConfig } from '../types';
+import type { Booking, EventType, BookingDetails, MergedBooking, ColumnConfiguration } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import BookingDetailsEditorModal from './BookingDetailsEditorModal';
 import DeleteBookingConfirmationModal from './DeleteBookingConfirmationModal';
 import DeleteMultipleBookingsModal from './DeleteMultipleBookingsModal';
-import { format, isValid, isWithinInterval, subDays, getWeek, getMonth, getDay } from 'date-fns';
+import RecordsFilterBar from './RecordsFilterBar';
+import { format, isValid } from 'date-fns';
 
 // --- Static Column Configuration ---
-const DEFAULT_COLUMNS: ColumnConfiguration = [
+const DISPLAY_COLUMNS: ColumnConfiguration = [
     { key: 'derivedDate', label: 'Date', isVisible: true },
     { key: 'companyName', label: 'Company Name', isVisible: true },
-    { key: 'derivedWeekNo', label: 'Week No.', isVisible: true },
-    { key: 'derivedSlot', label: 'Slot', isVisible: true },
-    { key: 'derivedDay', label: 'Day', isVisible: true },
-    { key: 'consultationDoneBy', label: 'Consultation Done By', isVisible: true },
-    { key: 'mode', label: 'Mode', isVisible: true },
-    { key: 'meetingStatus', label: 'Meeting Status', isVisible: true, type: 'select', options: ['Scheduled', 'Completed', 'Cancelled', 'No Show'] },
-    { key: 'derivedMonth', label: 'Month', isVisible: true },
     { key: 'bookerName', label: 'Client Name', isVisible: true },
-    { key: 'designation', label: 'Designation', isVisible: true },
-    { key: 'generalizedDesignation', label: 'Generalized Designation', isVisible: true },
-    { key: 'bookerPhone', label: 'Phone Number', isVisible: true },
-    { key: 'level', label: 'Level', isVisible: false },
-    { key: 'capability', label: 'Capability', isVisible: false },
-    { key: 'feedbackSent', label: 'Feedback Sent', isVisible: true, type: 'select', options: ['Pending', 'Yes', 'No'] },
-    { key: 'shownInterestInMembership', label: 'Shown Interest in Membership', isVisible: false, type: 'checkbox' },
-    { key: 'membership', label: 'Membership', isVisible: false, type: 'checkbox' },
-    { key: 'membershipVerification', label: 'Membership Verification', isVisible: false, type: 'checkbox' },
-    { key: 'bookerEmail', label: 'Email Id', isVisible: true },
-    { key: 'state', label: 'State', isVisible: false },
-    { key: 'district', label: 'District', isVisible: false },
-    { key: 'womenEntrepreneur', label: 'Women Entrepreneur', isVisible: false, type: 'checkbox' },
-    { key: 'noOfEmployeesInCompany', label: 'No of Employees in Company', isVisible: false },
-    { key: 'noOfAttendants', label: 'No of Attendants', isVisible: false },
-    { key: 'sector', label: 'Sector', isVisible: true },
-    { key: 'sectorGeneralized', label: 'Sector Generalized', isVisible: false },
-    { key: 'operationsPerfomedInBrief', label: 'Operations Perfomed In Brief', isVisible: false, type: 'textarea' },
-    { key: 'scale', label: 'Scale', isVisible: false },
-    { key: 'challenges', label: 'Challenges', isVisible: false, type: 'textarea' },
-    { key: 'manualTasks', label: 'Manual Tasks', isVisible: false, type: 'textarea' },
-    { key: 'suggestedTools', label: 'Suggested Tools', isVisible: false, type: 'textarea' },
-    { key: 'toolCategories', label: 'Tool Categories', isVisible: false },
-    { key: 'aiFamiliarityPre', label: 'AI Familiarity (Pre Consultation)', isVisible: false },
-    { key: 'kpi', label: 'KPI', isVisible: false },
-    { key: 'aiFamiliarityPost', label: 'AI Familiarty Post Consultation', isVisible: false },
-    { key: 'kpiValue', label: 'KPI Value', isVisible: false },
-    { key: 'howDidTheyGetToKnow', label: 'How did they get to know about AI Consultation', isVisible: false },
-    { key: 'additionalNotes1', label: 'Column 35', isVisible: false },
-    { key: 'notesForReport', label: 'Notes for Report', isVisible: true, type: 'textarea' },
-    { key: 'followUpRequestStatus', label: 'Follow Up Request Status', isVisible: false, type: 'select', options: ['Not Requested', 'Requested', 'Completed'] },
-    { key: 'followUpStatus', label: 'Follow Up (Done / Pending )', isVisible: true, type: 'select', options: ['Pending', 'Done'] },
-    { key: 'firefliesLink', label: 'Recording Link', isVisible: false, type: 'url' },
+    { key: 'eventTypeName', label: 'Event Type', isVisible: true },
+    { key: 'mode', label: 'Mode', isVisible: true },
+    { key: 'meetingStatus', label: 'Meeting Status', isVisible: true },
+    { key: 'followUpStatus', label: 'Follow-Up', isVisible: true },
+    { key: 'consultationDoneBy', label: 'Consultant', isVisible: true },
+    { key: 'bookerEmail', label: 'Email', isVisible: false },
+    { key: 'bookerPhone', label: 'Phone', isVisible: false },
+    { key: 'notesForReport', label: 'Notes', isVisible: false },
 ];
 
 const StatusBadge: React.FC<{ status?: MergedBooking['meetingStatus']}> = ({ status }) => {
@@ -68,16 +37,7 @@ const StatusBadge: React.FC<{ status?: MergedBooking['meetingStatus']}> = ({ sta
     return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${style}`}>{status || 'Scheduled'}</span>
 };
 
-const KpiCard: React.FC<{ title: string; value: string | number; description?: string }> = ({ title, value, description }) => (
-    <div className="bg-slate-50 p-4 rounded-lg">
-        <p className="text-sm text-slate-500 font-medium">{title}</p>
-        <p className="text-3xl font-bold text-primary mt-1">{value}</p>
-        {description && <p className="text-xs text-slate-400 mt-1">{description}</p>}
-    </div>
-);
-
-
-const DataExplorerPage: React.FC = () => {
+const RecordsPage: React.FC = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [eventTypes, setEventTypes] = useState<EventType[]>([]);
     const [bookingDetails, setBookingDetails] = useState<BookingDetails[]>([]);
@@ -91,12 +51,13 @@ const DataExplorerPage: React.FC = () => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isMultiDeleteModalOpen, setIsMultiDeleteModalOpen] = useState(false);
 
-    // Filters
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([]);
-    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-    const [dateRange, setDateRange] = useState('all');
-
+    // Filters state
+    const [filters, setFilters] = useState({
+        searchQuery: '',
+        eventTypes: [] as string[],
+        statuses: [] as string[],
+        dateRange: 'all',
+    });
 
     const fetchData = async () => {
         setLoading(true);
@@ -131,65 +92,17 @@ const DataExplorerPage: React.FC = () => {
                 const eventType = eventTypeMap.get(booking.eventTypeId);
                 return {
                     ...details,
-                    ...booking, // FIX: Spread booking last to ensure its properties (like startTime) take precedence
-                    eventTypeName: eventType?.name || '[Deleted Event]', // Robust handling for orphaned bookings
+                    ...booking,
+                    eventTypeName: eventType?.name || '[Deleted Event]',
                     mode: eventType?.mode || 'N/A',
                 };
             }).sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
     }, [bookings, eventTypes, bookingDetails]);
 
     const filteredData = useMemo(() => {
-        let data = mergedData;
-
-        // Date Range Filter
-        if (dateRange !== 'all') {
-            const now = new Date();
-            const rangeStart = subDays(now, parseInt(dateRange));
-            data = data.filter(item => isWithinInterval(item.startTime, { start: rangeStart, end: now }));
-        }
-
-        // Search Query Filter
-        if (searchQuery) {
-            const lowercasedQuery = searchQuery.toLowerCase();
-            data = data.filter(item =>
-                item.bookerName?.toLowerCase().includes(lowercasedQuery) ||
-                item.bookerEmail?.toLowerCase().includes(lowercasedQuery) ||
-                item.companyName?.toLowerCase().includes(lowercasedQuery)
-            );
-        }
-
-        // Event Type Filter
-        if (selectedEventTypes.length > 0) {
-            data = data.filter(item => selectedEventTypes.includes(item.eventTypeId));
-        }
-
-        // Status Filter
-        if (selectedStatuses.length > 0) {
-            data = data.filter(item => selectedStatuses.includes(item.meetingStatus || 'Scheduled'));
-        }
-
-        return data;
-    }, [mergedData, searchQuery, selectedEventTypes, selectedStatuses, dateRange]);
+        return firestoreService.filterBookings(mergedData, filters);
+    }, [mergedData, filters]);
     
-    const analyticsData = useMemo(() => {
-        const total = filteredData.length;
-        const completed = filteredData.filter(b => b.meetingStatus === 'Completed').length;
-        const noShows = filteredData.filter(b => b.meetingStatus === 'No Show').length;
-        const completionRate = (completed + noShows) > 0 ? (completed / (completed + noShows) * 100) : 0;
-        
-        const eventTypeCounts = filteredData.reduce((acc, booking) => {
-            acc[booking.eventTypeName] = (acc[booking.eventTypeName] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-
-        const mostPopularEvent = Object.entries(eventTypeCounts).sort((a, b) => b[1] - a[1])[0];
-
-        return {
-            totalBookings: total,
-            completionRate: `${completionRate.toFixed(1)}%`,
-            mostPopularEvent: mostPopularEvent ? mostPopularEvent[0] : 'N/A'
-        };
-    }, [filteredData]);
     
     const handleEdit = (booking: MergedBooking) => {
         setSelectedBooking(booking);
@@ -207,10 +120,10 @@ const DataExplorerPage: React.FC = () => {
             await firestoreService.updateBookingDetails(id, dataToSave, selectedBooking.eventTypeId);
             setIsDetailsModalOpen(false);
             setSelectedBooking(null);
-            await fetchData(); // Refresh data
+            await fetchData();
         } catch(error) {
             console.error("Failed to save details:", error);
-            alert("Could not save changes. Please try again.");
+            alert("Could not save changes. Please try again. Check console for details.");
         }
     };
 
@@ -219,10 +132,10 @@ const DataExplorerPage: React.FC = () => {
         try {
             await firestoreService.deleteBooking(bookingId, eventTypeId);
             setBookingToDelete(null);
-            await fetchData(); // Refresh data
+            await fetchData();
         } catch (error) {
             console.error("Failed to delete booking:", error);
-            alert("Could not delete the booking. Please try again.");
+            alert("Could not delete the booking. Please try again. Check console for details.");
         } finally {
             setIsDeleting(false);
         }
@@ -245,7 +158,6 @@ const DataExplorerPage: React.FC = () => {
     const handleConfirmMultiDelete = async () => {
         setIsDeleting(true);
         try {
-            // Create a map of booking ID to event type ID for the Apps Script payload
             const bookingToEventTypeMap = mergedData.reduce((acc, booking) => {
                 if (selectedIds.includes(booking.id)) {
                     acc[booking.id] = booking.eventTypeId;
@@ -259,7 +171,7 @@ const DataExplorerPage: React.FC = () => {
             await fetchData();
         } catch (error) {
             console.error("Failed to delete multiple bookings:", error);
-            alert("Could not delete all selected bookings. Please try again.");
+            alert("Could not delete all selected bookings. Please try again. Check console for details.");
         } finally {
             setIsDeleting(false);
         }
@@ -267,12 +179,7 @@ const DataExplorerPage: React.FC = () => {
     
     const getDisplayValue = (item: MergedBooking, key: string): string => {
         try {
-            const dateValid = item.startTime && isValid(item.startTime);
-            if (key === 'derivedDate') return dateValid ? format(item.startTime, 'PP') : 'Invalid Date';
-            if (key === 'derivedSlot') return dateValid && item.endTime && isValid(item.endTime) ? `${format(item.startTime, 'p')} - ${format(item.endTime, 'p')}` : 'Invalid Time';
-            if (key === 'derivedWeekNo') return dateValid ? String(getWeek(item.startTime)) : 'N/A';
-            if (key === 'derivedMonth') return dateValid ? format(item.startTime, 'MMMM') : 'N/A';
-            if (key === 'derivedDay') return dateValid ? format(item.startTime, 'EEEE') : 'N/A';
+            if (key === 'derivedDate') return item.startTime && isValid(item.startTime) ? format(item.startTime, 'PP') : 'Invalid Date';
             
             const value = (item as any)[key];
             if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -285,7 +192,7 @@ const DataExplorerPage: React.FC = () => {
     };
     
     const handleExportToCSV = () => {
-        const visibleColumns = DEFAULT_COLUMNS.filter(c => c.isVisible);
+        const visibleColumns = DISPLAY_COLUMNS.filter(c => c.isVisible);
         const headers = visibleColumns.map(c => c.label).join(',');
         const rows = filteredData.map(row => {
             return visibleColumns.map(col => {
@@ -309,42 +216,20 @@ const DataExplorerPage: React.FC = () => {
         return <div className="flex justify-center items-center h-96"><Spinner /></div>;
     }
     
-    const visibleColumns = DEFAULT_COLUMNS.filter(c => c.isVisible);
+    const visibleColumns = DISPLAY_COLUMNS.filter(c => c.isVisible);
 
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold">Data Explorer</h1>
 
-            <Card>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                     <input type="text" placeholder="Search by name, email, company..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"/>
-                     <select onChange={(e) => setSelectedEventTypes(Array.from(e.target.selectedOptions, option => option.value))} multiple className="w-full p-2 border rounded-md">
-                        <option value="">All Event Types</option>
-                        {eventTypes.map(et => <option key={et.id} value={et.id}>{et.name}</option>)}
-                     </select>
-                     <select onChange={(e) => setSelectedStatuses(Array.from(e.target.selectedOptions, option => option.value))} multiple className="w-full p-2 border rounded-md">
-                         <option value="">All Statuses</option>
-                         {['Scheduled', 'Completed', 'Cancelled', 'No Show'].map(s => <option key={s} value={s}>{s}</option>)}
-                     </select>
-                     <select value={dateRange} onChange={e => setDateRange(e.target.value)} className="w-full p-2 border rounded-md">
-                         <option value="all">All Time</option>
-                         <option value="7">Last 7 Days</option>
-                         <option value="30">Last 30 Days</option>
-                         <option value="90">Last 90 Days</option>
-                     </select>
-                 </div>
-            </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <KpiCard title="Total Bookings" value={analyticsData.totalBookings} description="Based on current filters" />
-                <KpiCard title="Completion Rate" value={analyticsData.completionRate} description="Completed vs (Completed + No Shows)" />
-                <KpiCard title="Most Popular Event" value={analyticsData.mostPopularEvent} description="Based on current filters" />
-            </div>
+            <RecordsFilterBar
+                eventTypes={eventTypes}
+                onFilterChange={setFilters}
+                onExport={handleExportToCSV}
+                resultsCount={filteredData.length}
+            />
             
             <Card className="p-0">
-                <div className="flex justify-end p-4 border-b">
-                     <Button onClick={handleExportToCSV}>Export CSV</Button>
-                </div>
                 <div className="overflow-x-auto custom-scrollbar">
                     {filteredData.length > 0 ? (
                         <table className="min-w-full divide-y divide-slate-200">
@@ -379,7 +264,7 @@ const DataExplorerPage: React.FC = () => {
                                         </td>
                                         <td className="sticky left-0 bg-white hover:bg-slate-50 px-6 py-4 whitespace-nowrap text-sm font-medium z-10 border-r">
                                             <div className="flex items-center gap-2">
-                                                <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>View</Button>
+                                                <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>View/Edit</Button>
                                                 <button onClick={() => handleDelete(item)} disabled={isDeleting} className="p-1.5 text-slate-400 hover:text-red-600 rounded-md hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Delete booking">
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
                                                 </button>
@@ -387,13 +272,7 @@ const DataExplorerPage: React.FC = () => {
                                         </td>
                                         {visibleColumns.map(col => (
                                             <td key={col.key as string} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 max-w-xs truncate" title={getDisplayValue(item, col.key as string)}>
-                                                {col.key === 'meetingStatus' ? (
-                                                    <StatusBadge status={item.meetingStatus} />
-                                                ) : col.key === 'firefliesLink' && item.firefliesLink ? (
-                                                    <a href={item.firefliesLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Recording</a>
-                                                ) : (
-                                                    getDisplayValue(item, col.key as string)
-                                                )}
+                                                {col.key === 'meetingStatus' ? <StatusBadge status={item.meetingStatus} /> : getDisplayValue(item, col.key as string)}
                                             </td>
                                         ))}
                                     </tr>
@@ -412,6 +291,7 @@ const DataExplorerPage: React.FC = () => {
             {isDetailsModalOpen && selectedBooking && (
                 <BookingDetailsEditorModal 
                     booking={selectedBooking}
+                    eventType={eventTypes.find(et => et.id === selectedBooking.eventTypeId)}
                     onClose={() => setIsDetailsModalOpen(false)}
                     onSave={handleSaveDetails}
                 />
@@ -435,7 +315,6 @@ const DataExplorerPage: React.FC = () => {
                 />
             )}
             
-            {/* Contextual Action Bar */}
             {selectedIds.length > 0 && (
                 <div className="fixed bottom-6 right-6 z-50 bg-white rounded-lg shadow-2xl p-4 flex items-center gap-4 animate-fade-in-up border">
                     <span className="text-sm font-medium text-slate-700">{selectedIds.length} selected</span>
@@ -454,4 +333,4 @@ const DataExplorerPage: React.FC = () => {
     );
 };
 
-export default DataExplorerPage;
+export default RecordsPage;

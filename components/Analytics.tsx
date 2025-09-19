@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Sector } from 'recharts';
 import { firestoreService } from '../services/firestoreService';
-import type { Booking, EventType } from '../types';
+import type { Booking, EventType, BookingDetails } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
 import Select from './ui/Select';
@@ -22,7 +22,7 @@ const renderActiveShape = (props: any) => {
 
   return (
     <g>
-      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill}>
+      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} className="font-semibold">
         {payload.name}
       </text>
       <Sector
@@ -47,87 +47,41 @@ const renderActiveShape = (props: any) => {
       <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
       <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333">{`${value} Bookings`}</text>
       <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999">
-        {`(Rate ${(percent * 100).toFixed(2)}%)`}
+        {`(Rate ${(percent * 100).toFixed(1)}%)`}
       </text>
     </g>
   );
 };
 
-const MultiSelectEventType: React.FC<{
-    eventTypes: EventType[];
-    selectedIds: string[];
-    onChange: (ids: string[]) => void;
-}> = ({ eventTypes, selectedIds, onChange }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const wrapperRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const handleSelect = (id: string) => {
-        const newSelectedIds = selectedIds.includes(id)
-            ? selectedIds.filter(selectedId => selectedId !== id)
-            : [...selectedIds, id];
-        onChange(newSelectedIds);
-    };
-
-    return (
-        <div className="relative w-full md:w-64" ref={wrapperRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full text-left px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900 flex justify-between items-center"
-            >
-                <span>{selectedIds.length === 0 ? 'All Event Types' : `${selectedIds.length} types selected`}</span>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            {isOpen && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                    {eventTypes.map(et => (
-                        <label key={et.id} className="flex items-center px-3 py-2 hover:bg-slate-50 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={selectedIds.includes(et.id)}
-                                onChange={() => handleSelect(et.id)}
-                                className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"
-                            />
-                            <span className="ml-2 text-sm text-slate-800">{et.name}</span>
-                        </label>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
-
+const KpiCard: React.FC<{ title: string; value: string | number; description?: string }> = ({ title, value, description }) => (
+    <div className="bg-slate-50 p-4 rounded-lg">
+        <p className="text-sm text-slate-500 font-medium">{title}</p>
+        <p className="text-3xl font-bold text-primary mt-1">{value}</p>
+        {description && <p className="text-xs text-slate-400 mt-1">{description}</p>}
+    </div>
+);
 
 const Analytics: React.FC = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [bookingDetails, setBookingDetails] = useState<BookingDetails[]>([]);
     const [eventTypes, setEventTypes] = useState<EventType[]>([]);
     const [loading, setLoading] = useState(true);
     const [pieActiveIndex, setPieActiveIndex] = useState(0);
 
-    // Filter states
-    const [dateRange, setDateRange] = useState('all'); // 'all', '7d', '30d', 'month'
-    const [selectedEventTypeIds, setSelectedEventTypeIds] = useState<string[]>([]);
-
+    const [dateRange, setDateRange] = useState('all');
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [books, types] = await Promise.all([
+                const [books, types, details] = await Promise.all([
                     firestoreService.getBookings(),
                     firestoreService.getEventTypes(),
+                    firestoreService.getBookingDetails(),
                 ]);
                 setBookings(books.map(b => ({...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime)})));
                 setEventTypes(types);
+                setBookingDetails(details);
             } catch (error) {
                 console.error("Failed to fetch analytics data:", error);
             } finally {
@@ -139,8 +93,6 @@ const Analytics: React.FC = () => {
     
     const filteredBookings = useMemo(() => {
         let bookingsToFilter = bookings;
-
-        // Date range filter
         const now = new Date();
         if (dateRange === '7d') {
             bookingsToFilter = bookingsToFilter.filter(b => isAfter(b.startTime, subDays(now, 7)));
@@ -150,57 +102,69 @@ const Analytics: React.FC = () => {
             const startOfThisMonth = startOfMonth(now);
             bookingsToFilter = bookingsToFilter.filter(b => isAfter(b.startTime, startOfThisMonth));
         }
-
-        // Event type filter
-        if (selectedEventTypeIds.length > 0) {
-            bookingsToFilter = bookingsToFilter.filter(b => selectedEventTypeIds.includes(b.eventTypeId));
-        }
-
         return bookingsToFilter;
-    }, [bookings, dateRange, selectedEventTypeIds]);
+    }, [bookings, dateRange]);
 
+    const analyticsData = useMemo(() => {
+        const detailsMap = new Map(bookingDetails.map(d => [d.id, d]));
+        const enrichedBookings = filteredBookings.map(b => ({
+            ...b,
+            details: detailsMap.get(b.id)
+        }));
 
-    const eventTypeMap = useMemo(() =>
-        eventTypes.reduce((acc, et) => {
-            acc[et.id] = et;
-            return acc;
-        }, {} as Record<string, EventType>), [eventTypes]);
+        const total = enrichedBookings.length;
+        const completed = enrichedBookings.filter(b => b.details?.meetingStatus === 'Completed').length;
+        const noShows = enrichedBookings.filter(b => b.details?.meetingStatus === 'No Show').length;
+        const completionRate = (completed + noShows) > 0 ? (completed / (completed + noShows) * 100) : 0;
+        
+        return {
+            totalBookings: total,
+            completionRate: `${completionRate.toFixed(1)}%`,
+            completedMeetings: completed,
+            followUpsDone: enrichedBookings.filter(b => b.details?.followUpStatus === 'Done').length,
+        };
+    }, [filteredBookings, bookingDetails]);
 
-    const bookingsPerDay = useMemo(() => {
-        const counts: { [key: string]: number } = {};
-        filteredBookings.forEach(booking => {
-            const day = format(booking.startTime, 'yyyy-MM-dd');
-            counts[day] = (counts[day] || 0) + 1;
-        });
-        return Object.entries(counts)
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => a.name.localeCompare(b.name));
-    }, [filteredBookings]);
-    
+    const eventTypeMap = useMemo(() => eventTypes.reduce((acc, et) => ({...acc, [et.id]: et }), {} as Record<string, EventType>), [eventTypes]);
+
     const popularBookingTimes = useMemo(() => {
         const hourCounts = Array(24).fill(0);
-        filteredBookings.forEach(booking => {
-            const hour = getHours(booking.startTime);
-            hourCounts[hour]++;
-        });
-        return hourCounts.map((count, hour) => ({
-            name: `${hour}:00`,
-            count,
-        })).filter(item => item.count > 0);
+        filteredBookings.forEach(booking => hourCounts[getHours(booking.startTime)]++);
+        return hourCounts.map((count, hour) => ({ name: `${hour}:00`, count })).filter(item => item.count > 0);
     }, [filteredBookings]);
 
     const bookingsByEventType = useMemo(() => {
-        const counts: { [key: string]: number } = {};
-        filteredBookings.forEach(booking => {
-            const eventTypeName = eventTypeMap[booking.eventTypeId]?.name || 'Unknown';
-            counts[eventTypeName] = (counts[eventTypeName] || 0) + 1;
-        });
+        const counts = filteredBookings.reduce((acc, booking) => {
+            const name = eventTypeMap[booking.eventTypeId]?.name || 'Unknown';
+            acc[name] = (acc[name] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
         return Object.entries(counts).map(([name, value]) => ({ name, value }));
     }, [filteredBookings, eventTypeMap]);
 
-    const eventTypeColors = useMemo(() => {
-        return eventTypes.map(et => et.color);
-    }, [eventTypes]);
+    const meetingStatusData = useMemo(() => {
+        const detailsMap = new Map(bookingDetails.map(d => [d.id, d]));
+        const statusCounts = filteredBookings.reduce((acc, booking) => {
+            const status = detailsMap.get(booking.id)?.meetingStatus || 'Scheduled';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+        return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+    }, [filteredBookings, bookingDetails]);
+
+    const followUpStatusData = useMemo(() => {
+        const detailsMap = new Map(bookingDetails.map(d => [d.id, d]));
+        const statusCounts = filteredBookings.reduce((acc, booking) => {
+            const status = detailsMap.get(booking.id)?.followUpStatus;
+            if (status) { // Only count if a status is set
+                 acc[status] = (acc[status] || 0) + 1;
+            }
+            return acc;
+        }, {} as Record<string, number>);
+        return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+    }, [filteredBookings, bookingDetails]);
+
+    const PIE_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
     if (loading) {
         return <div className="flex justify-center items-center h-96"><Spinner /></div>;
@@ -208,49 +172,60 @@ const Analytics: React.FC = () => {
 
     return (
         <div className="container mx-auto space-y-8">
-            <h1 className="text-3xl font-bold">Analytics</h1>
-             <Card>
-                <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <h2 className="text-xl font-semibold">Filters</h2>
-                    <div className="flex-grow flex flex-col md:flex-row gap-4 items-center w-full md:w-auto">
-                         <Select value={dateRange} onChange={e => setDateRange(e.target.value)} className="w-full md:w-48">
-                            <option value="all">All Time</option>
-                            <option value="7d">Last 7 Days</option>
-                            <option value="30d">Last 30 Days</option>
-                            <option value="month">This Month</option>
-                        </Select>
-                        <MultiSelectEventType 
-                            eventTypes={eventTypes} 
-                            selectedIds={selectedEventTypeIds}
-                            onChange={setSelectedEventTypeIds}
-                        />
-                    </div>
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <h1 className="text-3xl font-bold">Analytics</h1>
+                <div className="w-full md:w-auto">
+                    <Select value={dateRange} onChange={e => setDateRange(e.target.value)} className="w-full md:w-48">
+                        <option value="all">All Time</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="30d">Last 30 Days</option>
+                        <option value="month">This Month</option>
+                    </Select>
                 </div>
-            </Card>
+            </div>
 
-             <Card>
-                <h2 className="text-xl font-semibold mb-4">Key Metrics</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-3xl font-bold text-primary">{filteredBookings.length}</p>
-                        <p className="text-sm text-gray-500">Total Bookings</p>
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <KpiCard title="Total Bookings" value={analyticsData.totalBookings} description="Based on current filters" />
+                <KpiCard title="Completion Rate" value={analyticsData.completionRate} description="Completed / (Completed + No Shows)" />
+                <KpiCard title="Meetings Completed" value={analyticsData.completedMeetings} />
+                <KpiCard title="Follow-ups Done" value={analyticsData.followUpsDone} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                 <Card>
+                    <h2 className="text-xl font-semibold mb-4">Meeting Status Breakdown</h2>
+                    <div className="h-80">
+                         {meetingStatusData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={meetingStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value" paddingAngle={5}>
+                                        {meetingStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                         ) : <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>}
                     </div>
-                     <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-3xl font-bold text-primary">{eventTypes.length}</p>
-                        <p className="text-sm text-gray-500">Event Types</p>
+                </Card>
+                 <Card>
+                    <h2 className="text-xl font-semibold mb-4">Follow-up Status</h2>
+                    <div className="h-80">
+                         {followUpStatusData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={followUpStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value" paddingAngle={5}>
+                                        {followUpStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                         ) : <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>}
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-3xl font-bold text-primary">{bookingsPerDay.length}</p>
-                        <p className="text-sm text-gray-500">Active Days</p>
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-3xl font-bold text-primary">
-                            {filteredBookings.length > 0 ? (filteredBookings.reduce((sum, b) => sum + (eventTypes.find(et => et.id === b.eventTypeId)?.duration || 0), 0) / 60).toFixed(1) : 0}
-                        </p>
-                        <p className="text-sm text-gray-500">Total Hours Booked</p>
-                    </div>
-                </div>
-            </Card>
+                </Card>
+            </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card>
                     <h2 className="text-xl font-semibold mb-4">Bookings by Event Type</h2>
@@ -270,15 +245,12 @@ const Analytics: React.FC = () => {
                                         onMouseEnter={(_, index) => setPieActiveIndex(index)}
                                     >
                                         {bookingsByEventType.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={eventTypeColors[index % eventTypeColors.length]} />
+                                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip />
                                 </PieChart>
                             </ResponsiveContainer>
-                         ) : (
-                             <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>
-                         )}
+                         ) : <div className="flex items-center justify-center h-full text-gray-500">No data available.</div>}
                     </div>
                 </Card>
                  <Card>
@@ -291,35 +263,13 @@ const Analytics: React.FC = () => {
                                     <XAxis dataKey="name" />
                                     <YAxis allowDecimals={false} />
                                     <Tooltip />
-                                    <Legend />
                                     <Bar dataKey="count" fill="#0ea5e9" name="Bookings" />
                                 </BarChart>
                             </ResponsiveContainer>
-                         ) : (
-                             <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>
-                         )}
+                         ) : <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>}
                     </div>
                 </Card>
             </div>
-            <Card>
-                <h2 className="text-xl font-semibold mb-4">Bookings per Day</h2>
-                <div className="h-80">
-                     {bookingsPerDay.length > 0 ? (
-                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={bookingsPerDay} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis allowDecimals={false} />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="count" fill="#4f46e5" name="Bookings" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                         <div className="flex items-center justify-center h-full text-gray-500">No data for selected filters.</div>
-                     )}
-                </div>
-            </Card>
         </div>
     );
 };
