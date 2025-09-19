@@ -60,6 +60,21 @@ Follow these steps carefully to deploy the script and connect it to your SyncUp 
     VITE_APPS_SCRIPT_URL="https://script.google.com/macros/s/.../exec"
     ```
 
-Your backend is now live! The SyncUp application will use this URL to create bookings.
+### Step 8: Set Up Automated Reminders (New)
+
+To enable automated email reminders for upcoming meetings, you need to create a time-driven trigger.
+
+1.  In the Apps Script editor, click on the **Triggers** icon (a clock) on the left sidebar.
+2.  Click the **+ Add Trigger** button in the bottom right.
+3.  Configure the trigger with the following settings:
+    *   **Choose which function to run:** `checkAndSendReminders`
+    *   **Choose which deployment should run:** `Head`
+    *   **Select event source:** `Time-driven`
+    *   **Select type of time based trigger:** `Minutes timer`
+    *   **Select minute interval:** `Every 15 minutes` (or `Every 30 minutes`)
+4.  Click **Save**.
+
+You will be asked to authorize the script again because the triggers require background execution permissions. This is normal. After saving, the script will automatically check for upcoming meetings every 15 minutes and send reminders.
+
 
 **Important:** If you ever make changes to the script code in `main.gs`, you must create a **new deployment** to make those changes live. Go to **Deploy > Manage deployments**, select your deployment, click the pencil icon to edit, and change the version to **"New version"**.

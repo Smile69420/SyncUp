@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
@@ -153,9 +154,10 @@ const Dashboard: React.FC = () => {
     };
 
     const handleSaveDetails = async (details: BookingDetails) => {
+        if (!selectedBooking) return;
         try {
             const { id, ...dataToSave } = details;
-            await firestoreService.updateBookingDetails(id, dataToSave);
+            await firestoreService.updateBookingDetails(id, dataToSave, selectedBooking.eventTypeId);
             setIsDetailsModalOpen(false);
             setSelectedBooking(null);
             await fetchData(); // Refresh data

@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
@@ -219,42 +220,50 @@ const BookingForm: React.FC<BookingFormProps> = ({
     };
 
     return (
-        <div>
-            <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                <h3 className="font-semibold text-slate-800">Selected Time:</h3>
-                <p className="text-primary font-bold text-lg">{format(selectedSlot, 'PPPP p')}</p>
-            </div>
-            <h2 className="text-xl font-semibold">Enter Your Details</h2>
-            <div className="space-y-4 mt-4">
-                <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Name *</label>
-                    <input type="text" id="name" value={formState.name} onChange={e => onFormChange('name', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.name}/>
-                    {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
+        <div className="relative">
+             {isBooking && (
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-lg">
+                    <Spinner />
+                    <p className="mt-4 text-slate-600 font-semibold animate-pulse">Scheduling your meeting...</p>
                 </div>
-                <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
-                    <input type="email" id="email" value={formState.email} onChange={e => onFormChange('email', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.email}/>
-                    {formErrors.email && <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>}
+            )}
+            <div>
+                <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h3 className="font-semibold text-slate-800">Selected Time:</h3>
+                    <p className="text-primary font-bold text-lg">{format(selectedSlot, 'PPPP p')}</p>
                 </div>
-                <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number *</label>
-                    <input type="tel" id="phone" value={formState.phone} onChange={e => onFormChange('phone', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.phone}/>
-                    {formErrors.phone && <p className="text-xs text-red-500 mt-1">{formErrors.phone}</p>}
-                </div>
-                {eventType.customFormFields.map(field => (
-                    <div key={field.id}>
-                        {field.type !== 'checkbox' && (
-                             <label htmlFor={field.id} className="block text-sm font-medium text-slate-700">{field.label} {field.required && '*'}</label>
-                        )}
-                       {renderFormField(field)}
-                        {formErrors[field.id] && <p className="text-xs text-red-500 mt-1">{formErrors[field.id]}</p>}
+                <h2 className="text-xl font-semibold">Enter Your Details</h2>
+                <div className="space-y-4 mt-4">
+                    <div>
+                        <label htmlFor="name" className="block text-sm font-medium text-slate-700">Name *</label>
+                        <input type="text" id="name" value={formState.name} onChange={e => onFormChange('name', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.name ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.name}/>
+                        {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
                     </div>
-                ))}
-                <div className="flex items-center space-x-4 pt-2">
-                     <Button onClick={onConfirm} disabled={isBooking} className="w-full">
-                        {isBooking ? <Spinner size="sm" /> : 'Confirm Booking'}
-                    </Button>
-                     <Button variant="outline" onClick={onBack} className="w-full">Back</Button>
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
+                        <input type="email" id="email" value={formState.email} onChange={e => onFormChange('email', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.email ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.email}/>
+                        {formErrors.email && <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>}
+                    </div>
+                    <div>
+                        <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number *</label>
+                        <input type="tel" id="phone" value={formState.phone} onChange={e => onFormChange('phone', e.target.value)} className={`mt-1 block w-full px-3 py-2 bg-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900`} aria-invalid={!!formErrors.phone}/>
+                        {formErrors.phone && <p className="text-xs text-red-500 mt-1">{formErrors.phone}</p>}
+                    </div>
+                    {eventType.customFormFields.map(field => (
+                        <div key={field.id}>
+                            {field.type !== 'checkbox' && (
+                                 <label htmlFor={field.id} className="block text-sm font-medium text-slate-700">{field.label} {field.required && '*'}</label>
+                            )}
+                           {renderFormField(field)}
+                            {formErrors[field.id] && <p className="text-xs text-red-500 mt-1">{formErrors[field.id]}</p>}
+                        </div>
+                    ))}
+                    <div className="flex items-center space-x-4 pt-2">
+                         <Button onClick={onConfirm} disabled={isBooking} className="w-full">
+                            {isBooking ? <Spinner size="sm" /> : 'Confirm Booking'}
+                        </Button>
+                         <Button variant="outline" onClick={onBack} disabled={isBooking} className="w-full">Back</Button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -132,11 +132,40 @@ export const firestoreService = {
   },
 
   /**
-   * Updates a booking details document in Firestore.
+   * Updates a booking details document in Firestore and syncs status changes to Google Sheets.
    */
-  updateBookingDetails: async (detailsId: string, data: Partial<BookingDetailsDocument>): Promise<void> => {
-    const docRef = doc(db, 'bookingDetails', detailsId);
+  updateBookingDetails: async (bookingId: string, data: Partial<BookingDetailsDocument>, eventTypeId?: string): Promise<void> => {
+    const docRef = doc(db, 'bookingDetails', bookingId);
     await updateDoc(docRef, data);
+
+    // If meetingStatus was updated, sync to Google Sheet
+    if (data.meetingStatus && eventTypeId) {
+        const appsScriptUrl = config.appsScriptUrl;
+        if (!appsScriptUrl) return;
+
+        try {
+            const eventType = await firestoreService.getEventTypeById(eventTypeId);
+            if (eventType && eventType.googleSheetConfig?.sheetId && eventType.googleSheetConfig?.sheetName) {
+                const payload = {
+                    action: 'updateStatus',
+                    bookingId: bookingId,
+                    newStatus: data.meetingStatus,
+                    sheetId: eventType.googleSheetConfig.sheetId,
+                    sheetName: eventType.googleSheetConfig.sheetName,
+                };
+
+                await fetch(appsScriptUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                console.log(`[APPS SCRIPT] Sent status update for booking ${bookingId}`);
+            }
+        } catch (error) {
+            console.error("[APPS SCRIPT] Failed to send status update:", error);
+        }
+    }
   },
 
   /**

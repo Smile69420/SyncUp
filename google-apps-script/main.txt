@@ -1,0 +1,517 @@
+/**
+ * @OnlyCurrentDoc
+ *
+ * The main entry point for the web app. This function is called when a POST request is made to the script's URL.
+ * It handles creating Google Meet links and logging booking data to Google Sheets.
+ *
+ * @param {object} e The event parameter for a POST request.
+ * @returns {ContentService.TextOutput} A JSON response indicating success or failure.
+ */
+function doPost(e) {
+  try {
+    // 1. PARSE INCOMING DATA
+    const requestBody = e.postData.contents;
+    const data = JSON.parse(requestBody);
+
+    // 2. ROUTE REQUEST BASED ON ACTION
+    if (data.action === 'updateStatus') {
+      // --- Handle Status Update ---
+      const { bookingId, newStatus, sheetId, sheetName } = data;
+      if (!bookingId || !newStatus || !sheetId || !sheetName) {
+        throw new Error("Missing parameters for updateStatus action.");
+      }
+      
+      console.log(`Received status update for booking ${bookingId} to "${newStatus}"`);
+      updateMeetingStatusInSheet(bookingId, newStatus, sheetId, sheetName);
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'success', message: 'Status update processed.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+
+    } else {
+      // --- Handle New Booking Creation (Default) ---
+      const { eventType, bookingData } = data;
+      if (!eventType || !bookingData) {
+        throw new Error("Missing eventType or bookingData in the request for new booking.");
+      }
+
+      let meetingLink = null;
+
+      // Handle Google Meet Integration
+      if (eventType.mode === 'online' && eventType.conferencing && eventType.conferencing.provider === 'google-meet') {
+        console.log(`Creating Google Meet link for booking ID: ${bookingData.id}`);
+        let meetCreationResult = createMeetLinkAndCalendarEvent(eventType, bookingData);
+        
+        if (meetCreationResult && meetCreationResult !== "DUPLICATE_REQUEST") {
+          meetingLink = meetCreationResult;
+          console.log(`Successfully created Meet link: ${meetingLink}`);
+          updateBookingInFirestore(bookingData.id, { meetingLink: meetingLink });
+          console.log(`Updated Firestore for booking ID: ${bookingData.id}`);
+        } else {
+           console.log(`Meet link was not created or already exists for booking ID: ${bookingData.id}`);
+        }
+      }
+
+      // Handle Google Sheets Integration
+      if (eventType.googleSheetConfig && eventType.googleSheetConfig.sheetId && eventType.googleSheetConfig.sheetName) {
+        console.log(`Logging booking ID ${bookingData.id} to Google Sheet ID: ${eventType.googleSheetConfig.sheetId}`);
+        logToGoogleSheet(eventType, bookingData, meetingLink);
+        console.log(`Successfully logged booking ID ${bookingData.id} to Google Sheets.`);
+      }
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'success', meetingLink: meetingLink }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+  } catch (error) {
+    console.error(`Error in doPost: ${error.toString()} \nStack: ${error.stack}`);
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'error', message: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Finds a booking row by its ID in a Google Sheet and updates its status.
+ *
+ * @param {string} bookingId The unique ID of the booking to find.
+ * @param {string} newStatus The new status to set (e.g., "Completed").
+ * @param {string} sheetId The ID of the Google Spreadsheet.
+ * @param {string} sheetName The name of the sheet (tab) within the spreadsheet.
+ */
+function updateMeetingStatusInSheet(bookingId, newStatus, sheetId, sheetName) {
+  try {
+    const sheet = SpreadsheetApp.openById(sheetId).getSheetByName(sheetName);
+    if (!sheet) {
+      console.log(`Sheet "${sheetName}" not found. Skipping status update.`);
+      return;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 1) {
+      console.log('Sheet is empty. Skipping update.');
+      return;
+    }
+
+    const headers = data[0];
+    const bookingIdCol = headers.indexOf('Booking ID');
+    const statusCol = headers.indexOf('Status');
+
+    if (bookingIdCol === -1 || statusCol === -1) {
+      console.log('Could not find "Booking ID" or "Status" column in the sheet. Skipping update.');
+      return;
+    }
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][bookingIdCol] == bookingId) {
+        // Found the row, +1 for header row, +1 for 1-based index
+        const rowToUpdate = i + 1;
+        sheet.getRange(rowToUpdate, statusCol + 1).setValue(newStatus);
+        console.log(`Updated status to "${newStatus}" for booking ID ${bookingId} in row ${rowToUpdate}.`);
+        return; // Exit after finding and updating
+      }
+    }
+
+    console.log(`Booking ID ${bookingId} not found in the sheet.`);
+
+  } catch (err) {
+    console.error(`Error in updateMeetingStatusInSheet: ${err.toString()}`);
+    // Do not throw to prevent client-side error popups for non-critical background tasks
+  }
+}
+
+
+/**
+ * Creates a Google Calendar event with a Meet link for the specified booking.
+ *
+ * @param {object} eventType The event type details.
+ * @param {object} bookingData The data for the new booking.
+ * @returns {string} The URL of the generated Google Meet link.
+ */
+function createMeetLinkAndCalendarEvent(eventType, bookingData) {
+  const calendarId = 'primary'; // Use the primary calendar of the user who deployed the script.
+  const { bookerName, bookerEmail, startTime, endTime } = bookingData;
+  
+  const event = {
+    summary: `${eventType.name} with ${bookerName}`,
+    description: `Booking details for ${eventType.name}.\nBooker: ${bookerName} (${bookerEmail})`,
+    start: {
+      dateTime: new Date(startTime).toISOString(),
+    },
+    end: {
+      dateTime: new Date(endTime).toISOString(),
+    },
+    attendees: [
+      { email: bookerEmail }
+    ],
+    conferenceData: {
+      createRequest: {
+        requestId: `syncup-${bookingData.id}`, // Unique ID to prevent duplicate Meet links on retries.
+        conferenceSolutionKey: {
+          type: 'hangoutsMeet',
+        },
+      },
+    },
+    // Add private properties to track this event and its reminder status
+    extendedProperties: {
+      private: {
+        'syncUpBookingId': bookingData.id,
+        'reminder_14h_sent': 'false',
+        'reminder_6h_sent': 'false',
+        'reminder_2h_sent': 'false',
+        'reminder_30m_sent': 'false',
+        'reminder_0m_sent': 'false',
+      }
+    },
+    // Send notifications to the attendee.
+    reminders: {
+        useDefault: true,
+    }
+  };
+
+  try {
+    const createdEvent = Calendar.Events.insert(event, calendarId, {
+      conferenceDataVersion: 1,
+      sendNotifications: true, // Send calendar invitation to the booker.
+    });
+    
+    if (createdEvent.hangoutLink) {
+      return createdEvent.hangoutLink;
+    } else {
+      throw new Error("Calendar event was created, but no Meet link was generated.");
+    }
+  } catch (err) {
+    // Check if the error is because the event already exists (due to the requestId).
+    if (err.message.includes("conferenceData.createRequest.requestId must be unique")) {
+        console.log("Event with this requestId already exists. This may be a retry. Skipping creation.");
+        return "DUPLICATE_REQUEST";
+    }
+    console.error(`Failed to create calendar event: ${err.toString()}`);
+    throw new Error(`Google Calendar API Error: ${err.message}`);
+  }
+}
+
+
+/**
+ * Appends a row with booking information to a specified Google Sheet.
+ *
+ * @param {object} eventType The event type details, containing sheet configuration.
+ * @param {object} bookingData The booking data to log.
+ * @param {string|null} meetingLink The generated Google Meet link, if any.
+ */
+function logToGoogleSheet(eventType, bookingData, meetingLink) {
+  try {
+    const { sheetId, sheetName } = eventType.googleSheetConfig;
+    const sheet = SpreadsheetApp.openById(sheetId).getSheetByName(sheetName);
+    
+    if (!sheet) {
+      throw new Error(`Sheet with name "${sheetName}" not found in Spreadsheet ID "${sheetId}".`);
+    }
+
+    // Comprehensive header definition
+    const headers = [
+      'Booking ID', 'Event Name', 'Status', 'Date', 'Start Time', 'End Time', 
+      'Mode', 'Location / Link', 'Client Name', 'Email Id', 'Phone Number', 
+    ];
+
+    // Add custom form field labels to headers
+    const customFieldLabels = (eventType.customFormFields || []).map(function(field) {
+        return field.label;
+    });
+    const fullHeaders = headers.concat(customFieldLabels);
+
+    // Check if header row exists, if not, create it.
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(fullHeaders);
+      sheet.getRange('1:1').setFontWeight('bold');
+    }
+
+    const customAnswersMap = eventType.customFormFields.reduce(function(map, field) {
+        var answer = bookingData.customAnswers[field.id];
+        if (field.type === 'checkbox') {
+            map[field.label] = answer === 'true' ? 'Yes' : 'No';
+        } else {
+            map[field.label] = answer || 'N/A';
+        }
+        return map;
+    }, {});
+
+    const customAnswerValues = customFieldLabels.map(function(label) {
+        return customAnswersMap[label] || 'N/A';
+    });
+    
+    const rowData = [
+      bookingData.id,
+      eventType.name,
+      'Scheduled', // Initial status
+      new Date(bookingData.startTime), // Format as date
+      new Date(bookingData.startTime), // Format as time
+      new Date(bookingData.endTime),   // Format as time
+      eventType.mode,
+      eventType.mode === 'online' ? (meetingLink || eventType.conferencing.customLink || 'N/A') : eventType.location,
+      bookingData.bookerName,
+      bookingData.bookerEmail,
+      bookingData.bookerPhone,
+    ].concat(customAnswerValues);
+
+    sheet.appendRow(rowData);
+    
+    // Auto-format date/time columns for better readability
+    const lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow, 4).setNumberFormat('yyyy-mm-dd'); // Date
+    sheet.getRange(lastRow, 5, 1, 2).setNumberFormat('hh:mm am/pm'); // Start and End Time
+
+  } catch (err) {
+    console.error(`Failed to log to Google Sheet: ${err.toString()}`);
+    // We don't re-throw here to allow the booking process to succeed even if logging fails.
+  }
+}
+
+
+/**
+ * Updates a booking document in Firestore.
+ * This requires setting up the FirebaseApp library and service account credentials.
+ *
+ * SETUP REQUIRED:
+ * 1. In Apps Script Editor: Resources > Libraries...
+ * 2. Add this library key: 1VUSl4b1r1L5EOcdtZeP67oEbE7Octr2B4QLfME5X9_coVdnrUtM5cFNf
+ * 3. Select the latest version and use 'FirebaseApp' as the identifier.
+ * 4. In Project Settings > Script Properties, add the following properties:
+ *    - FIREBASE_PRIVATE_KEY: The private key from your Firebase service account JSON file (include the `-----BEGIN...` and `...END-----` parts, replacing newlines with `\n`).
+ *    - FIREBASE_CLIENT_EMAIL: The client_email from your service account JSON.
+ *    - FIREBASE_PROJECT_ID: Your Firebase project ID.
+ *
+ * @param {string} bookingId The ID of the document to update in the 'bookings' collection.
+ * @param {object} data The data to update.
+ */
+function updateBookingInFirestore(bookingId, data) {
+  try {
+    const firestore = getFirebaseService();
+    firestore.updateDocument(`bookings/${bookingId}`, data);
+  } catch (err) {
+    console.error(`Failed to update Firestore for booking ${bookingId}: ${err.toString()}`);
+    throw new Error(`Firestore update failed: ${err.message}`);
+  }
+}
+
+
+/**
+ * Initializes and returns an authenticated Firestore instance.
+ *
+ * @returns {object} An authenticated Firestore instance from the FirebaseApp library.
+ */
+function getFirebaseService() {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const privateKey = scriptProperties.getProperty('FIREBASE_PRIVATE_KEY');
+  const clientEmail = scriptProperties.getProperty('FIREBASE_CLIENT_EMAIL');
+  const projectId = scriptProperties.getProperty('FIREBASE_PROJECT_ID');
+  
+  if (!privateKey || !clientEmail || !projectId) {
+    throw new Error("Firebase service account properties are not set in Script Properties.");
+  }
+
+  return FirebaseApp.getFirestore(clientEmail, privateKey.replace(/\\n/g, '\n'), projectId);
+}
+
+
+// --- AUTOMATED REMINDER SYSTEM ---
+
+/**
+ * Scans for upcoming calendar events and sends email reminders.
+ * This function should be run on a time-driven trigger (e.g., every 15 minutes).
+ */
+function checkAndSendReminders() {
+  const now = new Date();
+  // Look for events in the next 15 hours to cover all reminder intervals.
+  const searchWindowEnd = new Date(now.getTime() + 15 * 60 * 60 * 1000); 
+
+  try {
+    const events = Calendar.Events.list('primary', {
+      timeMin: now.toISOString(),
+      timeMax: searchWindowEnd.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      privateExtendedProperty: 'syncUpBookingId' // Filter for events created by this app
+    }).items;
+
+    if (!events || events.length === 0) {
+      console.log("No upcoming SyncUp events found to check for reminders.");
+      return;
+    }
+
+    console.log(`Found ${events.length} upcoming event(s) to check.`);
+
+    events.forEach(function(event) {
+      const props = event.extendedProperties.private || {};
+      const startTime = new Date(event.start.dateTime);
+      const minutesUntilMeeting = (startTime.getTime() - now.getTime()) / (1000 * 60);
+
+      // Find the booker's email (attendee who is not the organizer)
+      const booker = (event.attendees || []).find(function(att) {
+        return att.organizer !== true && att.responseStatus !== 'declined';
+      });
+
+      if (!booker || !booker.email) {
+        console.log(`Could not find a valid booker for event ${event.id}. Skipping.`);
+        return;
+      }
+
+      let recipientName = booker.displayName || '';
+      const summaryMatch = event.summary.match(/(.*) with (.*)/);
+      if (summaryMatch && summaryMatch[2]) {
+        recipientName = summaryMatch[2];
+      }
+      
+      const eventDetails = {
+        recipientName: recipientName,
+        recipientEmail: booker.email,
+        eventName: summaryMatch ? summaryMatch[1] : event.summary,
+        startTime: startTime,
+        meetingLink: event.hangoutLink
+      };
+      
+      const reminderIntervals = [
+        { minutes: 14 * 60, key: 'reminder_14h_sent', subject: "Upcoming Meeting Reminder: 14 Hours to Go!" },
+        { minutes: 6 * 60,  key: 'reminder_6h_sent',  subject: "Reminder: Your Meeting is in 6 Hours" },
+        { minutes: 2 * 60,  key: 'reminder_2h_sent',  subject: "Heads Up: Your Meeting is in 2 Hours" },
+        { minutes: 30,      key: 'reminder_30m_sent', subject: "Reminder: Your Meeting Starts in 30 Minutes" },
+        { minutes: 5,       key: 'reminder_0m_sent',  subject: "Your Meeting is Starting Now!" } // Check 5 mins before for safety
+      ];
+
+      let propsToUpdate = {};
+
+      reminderIntervals.forEach(function(interval) {
+        if (props[interval.key] !== 'true' && minutesUntilMeeting <= interval.minutes) {
+          console.log(`Sending ${interval.key} for event: ${event.id} to ${eventDetails.recipientEmail}`);
+          sendReminderEmail(eventDetails, interval.subject, interval.minutes);
+          propsToUpdate[interval.key] = 'true';
+        }
+      });
+
+      if (Object.keys(propsToUpdate).length > 0) {
+        const newPrivateProps = Object.assign({}, props, propsToUpdate);
+        const patch = {
+          extendedProperties: {
+            private: newPrivateProps
+          }
+        };
+        Calendar.Events.patch(patch, 'primary', event.id);
+        console.log(`Updated reminders state for event: ${event.id}`);
+      }
+    });
+
+  } catch (err) {
+    console.error(`Error in checkAndSendReminders: ${err.toString()}`);
+  }
+}
+
+/**
+ * Sends a styled HTML reminder email.
+ * @param {object} details - The details for the email.
+ * @param {string} subject - The subject line of the email.
+ * @param {number} minutesUntil - How many minutes until the meeting.
+ */
+function sendReminderEmail(details, subject, minutesUntil) {
+  const { recipientName, recipientEmail, eventName, startTime, meetingLink } = details;
+  
+  if (!recipientEmail) {
+    console.error("No recipient email provided. Cannot send reminder.");
+    return;
+  }
+  
+  const htmlBody = getHtmlEmailTemplate(recipientName, eventName, startTime, meetingLink, minutesUntil);
+
+  MailApp.sendEmail({
+    to: recipientEmail,
+    subject: subject,
+    htmlBody: htmlBody,
+    name: "SyncUp Scheduler" // Sender name
+  });
+}
+
+/**
+ * Generates a professional HTML email template for reminders.
+ * @returns {string} The HTML content for the email body.
+ */
+function getHtmlEmailTemplate(name, eventName, startTime, meetingLink, minutesUntil) {
+  const timeZone = Session.getScriptTimeZone();
+  const formattedDate = Utilities.formatDate(startTime, timeZone, "EEEE, MMMM d, yyyy");
+  const formattedTime = Utilities.formatDate(startTime, timeZone, "h:mm a z");
+
+  let leadText;
+  if (minutesUntil <= 5) { // The "starting now" email
+      leadText = "Your meeting is about to start. Please join using the link below:";
+  } else {
+      leadText = "This is a friendly reminder for your upcoming meeting:";
+  }
+
+  // Using inline CSS for maximum email client compatibility
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; background-color: #f4f4f7;">
+      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f4f7;">
+        <tr>
+          <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+              <!-- Header -->
+              <tr>
+                <td align="center" style="padding: 40px 0; border-bottom: 1px solid #e9e9eb;">
+                  <h1 style="margin: 0; color: #333333; font-size: 28px; font-weight: 600;">Meeting Reminder</h1>
+                </td>
+              </tr>
+              <!-- Body -->
+              <tr>
+                <td style="padding: 40px 30px;">
+                  <p style="margin: 0 0 20px; font-size: 16px; color: #555555; line-height: 1.6;">Hi ${name || 'there'},</p>
+                  <p style="margin: 0 0 20px; font-size: 16px; color: #555555; line-height: 1.6;">${leadText}</p>
+                  <!-- Event Details Card -->
+                  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f9f9fb; border: 1px solid #e9e9eb; border-radius: 6px; padding: 20px; text-align: left;">
+                    <tr>
+                      <td style="padding-bottom: 15px;">
+                        <strong style="color: #333333; font-size: 18px;">${eventName}</strong>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding-bottom: 10px; font-size: 16px; color: #555555; display: flex; align-items: center;">
+                        <img src="https://ssl.gstatic.com/calendar/images/dynamic/sprites/271f24d7709596041a365f575c2e27b1.svg#icon-event-black-24" alt="Date" style="vertical-align: middle; margin-right: 10px; width: 20px; height: 20px;" />
+                        ${formattedDate}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-size: 16px; color: #555555; display: flex; align-items: center;">
+                         <img src="https://ssl.gstatic.com/calendar/images/dynamic/sprites/271f24d7709596041a365f575c2e27b1.svg#icon-clock-black-24" alt="Time" style="vertical-align: middle; margin-right: 10px; width: 20px; height: 20px;" />
+                        ${formattedTime}
+                      </td>
+                    </tr>
+                  </table>
+                  <!-- CTA Button -->
+                  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 30px;">
+                    <tr>
+                      <td align="center">
+                        <a href="${meetingLink}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: 600; color: #ffffff; background-color: #4f46e5; border-radius: 6px; text-decoration: none;">Join Meeting</a>
+                      </td>
+                    </tr>
+                  </table>
+                   <p style="margin: 30px 0 0; text-align: center; font-size: 14px; color: #888888;">If you're having trouble with the button, copy and paste this link into your browser: <br/><a href="${meetingLink}" style="color: #4f46e5; text-decoration: none; word-break: break-all;">${meetingLink}</a></p>
+                </td>
+              </tr>
+              <!-- Footer -->
+              <tr>
+                <td align="center" style="padding: 20px 30px; border-top: 1px solid #e9e9eb; background-color: #f9f9fb;">
+                  <p style="margin: 0; font-size: 12px; color: #888888;">This is an automated reminder from SyncUp Scheduler.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+}

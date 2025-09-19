@@ -8,7 +8,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import BookingDetailsEditorModal from './BookingDetailsEditorModal';
 import ColumnManagerModal from './ColumnManagerModal';
-import { format, getWeek } from 'date-fns';
+import { format, getWeek, isValid } from 'date-fns';
 
 const StatusBadge: React.FC<{ status?: MergedBooking['meetingStatus']}> = ({ status }) => {
     const statusStyles = {
@@ -61,16 +61,18 @@ const RecordsPage: React.FC = () => {
         const eventTypeMap = new Map(eventTypes.map(et => [et.id, et]));
         const bookingDetailsMap = new Map(bookingDetails.map(bd => [bd.id, bd]));
 
-        return bookings.map(booking => {
-            const details = bookingDetailsMap.get(booking.id) || { id: booking.id };
-            const eventType = eventTypeMap.get(booking.eventTypeId);
-            return {
-                ...booking,
-                ...details,
-                eventTypeName: eventType?.name || 'Unknown',
-                mode: eventType?.mode || 'N/A',
-            };
-        }).sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+        return bookings
+            .filter(booking => booking.startTime && isValid(booking.startTime)) // Filter out invalid bookings
+            .map(booking => {
+                const details = bookingDetailsMap.get(booking.id) || { id: booking.id };
+                const eventType = eventTypeMap.get(booking.eventTypeId);
+                return {
+                    ...booking,
+                    ...details,
+                    eventTypeName: eventType?.name || 'Unknown',
+                    mode: eventType?.mode || 'N/A',
+                };
+            }).sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
     }, [bookings, eventTypes, bookingDetails]);
     
     const handleEdit = (booking: MergedBooking) => {
@@ -79,10 +81,11 @@ const RecordsPage: React.FC = () => {
     };
     
     const handleSaveDetails = async (details: BookingDetails) => {
+        if (!selectedBooking) return;
         try {
             const { id, ...dataToSave } = details;
             // FIX: Replaced `schedulingService` with `firestoreService` to use the correct data service.
-            await firestoreService.updateBookingDetails(id, dataToSave);
+            await firestoreService.updateBookingDetails(id, dataToSave, selectedBooking.eventTypeId);
             setIsDetailsModalOpen(false);
             setSelectedBooking(null);
             await fetchData(); // Refresh data
@@ -105,9 +108,18 @@ const RecordsPage: React.FC = () => {
     };
     
     const getDisplayValue = (item: MergedBooking, key: string) => {
+        const isValidDate = (date: any) => date instanceof Date && isValid(date);
+        
+        if (!isValidDate(item.startTime)) {
+            if (key.startsWith('derived')) return 'Invalid Date';
+        }
+
         if (key === 'derivedDate') return format(item.startTime, 'PP');
         if (key === 'derivedWeekNo') return getWeek(item.startTime);
-        if (key === 'derivedSlot') return `${format(item.startTime, 'p')} - ${format(item.endTime, 'p')}`;
+        if (key === 'derivedSlot') {
+            if (!isValidDate(item.endTime)) return format(item.startTime, 'p') + ' - ?';
+            return `${format(item.startTime, 'p')} - ${format(item.endTime, 'p')}`;
+        }
         if (key === 'derivedDay') return format(item.startTime, 'EEEE');
         if (key === 'derivedMonth') return format(item.startTime, 'MMMM');
         
