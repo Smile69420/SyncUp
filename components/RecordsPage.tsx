@@ -80,8 +80,8 @@ const DataExplorerPage: React.FC = () => {
                 const details = bookingDetailsMap.get(booking.id) || { id: booking.id };
                 const eventType = eventTypeMap.get(booking.eventTypeId);
                 return {
-                    ...booking,
                     ...details,
+                    ...booking, // FIX: Spread booking last to ensure its properties (like startTime) take precedence
                     eventTypeName: eventType?.name || '[Deleted Event]', // Robust handling for orphaned bookings
                     mode: eventType?.mode || 'N/A',
                 };
