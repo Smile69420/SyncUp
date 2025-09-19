@@ -51,43 +51,6 @@ const bufferOptions = [
     { label: 'Custom', value: 'custom' },
 ];
 
-const bookingDetailsFields: { key: string, label: string }[] = [
-    { key: 'companyName', label: 'Company Name' },
-    { key: 'consultationDoneBy', label: 'Consultation Done By' },
-    { key: 'designation', label: 'Designation' },
-    { key: 'generalizedDesignation', label: 'Generalized Designation' },
-    { key: 'level', label: 'Level' },
-    { key: 'capability', label: 'Capability' },
-    { key: 'feedbackSent', label: 'Feedback Sent' },
-    { key: 'shownInterestInMembership', label: 'Shown Interest in Membership' },
-    { key: 'membership', label: 'Membership' },
-    { key: 'membershipVerification', label: 'Membership Verification' },
-    { key: 'state', label: 'State' },
-    { key: 'district', label: 'District' },
-    { key: 'womenEntrepreneur', label: 'Women Entrepreneur' },
-    { key: 'noOfEmployeesInCompany', label: 'No of Employees in Company' },
-    { key: 'noOfAttendants', label: 'No of Attendants' },
-    { key: 'sector', label: 'Sector' },
-    { key: 'sectorGeneralized', label: 'Sector Generalized' },
-    { key: 'operationsPerfomedInBrief', label: 'Operations Perfomed In Brief' },
-    { key: 'scale', label: 'Scale' },
-    { key: 'challenges', label: 'Challenges' },
-    { key: 'manualTasks', label: 'Manual Tasks' },
-    { key: 'suggestedTools', label: 'Suggested Tools' },
-    { key: 'toolCategories', label: 'Tool Categories' },
-    { key: 'aiFamiliarityPre', label: 'AI Familiarity (Pre)' },
-    { key: 'kpi', label: 'KPI' },
-    { key: 'aiFamiliarityPost', label: 'AI Familiarity (Post)' },
-    { key: 'kpiValue', label: 'KPI Value' },
-    { key: 'howDidTheyGetToKnow', label: 'How did they get to know' },
-    { key: 'additionalNotes1', label: 'Additional Notes 1' },
-    { key: 'notesForReport', label: 'Notes for Report' },
-    { key: 'followUpRequestStatus', label: 'Follow Up Request Status' },
-    { key: 'followUpStatus', label: 'Follow Up Status' },
-    { key: 'meetingDone', label: 'Meeting Done' },
-];
-
-
 const PresetSelector = ({ label, value, onChange, options, unit, inputClasses }) => {
     const isCustom = !options.some(opt => opt.value === value);
 
@@ -727,14 +690,6 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                             <div className="flex items-center">
                                                 <input type="checkbox" id={`req-${field.id}`} checked={field.required} onChange={e => updateFormField(field.id, 'required', e.target.checked)} className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"/>
                                                 <label htmlFor={`req-${field.id}`} className="ml-2 text-sm font-medium">Required</label>
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className="block text-sm font-medium text-slate-700">Link to Record Field</label>
-                                                <Select value={field.linkedRecordField || ''} onChange={e => updateFormField(field.id, 'linkedRecordField', e.target.value)}>
-                                                    <option value="">None</option>
-                                                    {bookingDetailsFields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
-                                                </Select>
-                                                <p className="text-xs text-slate-500 mt-1">Automatically save this answer to a specific field in the Data Explorer.</p>
                                             </div>
                                         </div>
                                         {(field.type === 'select' || field.type === 'radio') && (

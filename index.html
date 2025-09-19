@@ -70,6 +70,7 @@
       }
       .custom-scrollbar::-webkit-scrollbar {
         width: 6px;
+        height: 6px;
       }
       .custom-scrollbar::-webkit-scrollbar-track {
         background: #f1f5f9;
@@ -99,8 +100,15 @@
       .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
 
       @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+          color-adjust: exact;
+          background-color: #ffffff !important;
+        }
         body * {
           visibility: hidden;
+          box-shadow: none !important;
+          transition: none !important;
         }
         .printable-area, .printable-area * {
           visibility: visible;
@@ -110,28 +118,40 @@
           left: 0;
           top: 0;
           width: 100%;
+          height: auto;
+          overflow: visible;
+          border: none !important;
         }
         .no-print {
           display: none !important;
         }
-        /* Simple reset for calendar view for printing */
-        .printable-area .border, .printable-area .border-b, .printable-area .border-l {
-          border-color: #ccc !important;
+        .printable-area .custom-scrollbar {
+          overflow: visible !important;
         }
-        .printable-area .bg-blue-50 {
-          background-color: transparent !important;
+        .printable-area .print-event {
+          background-color: var(--event-color-light) !important;
+          border-left-color: var(--event-color-dark) !important;
+          color: var(--event-text-color) !important;
+        }
+        .printable-area .print-month-event {
+          background-color: var(--event-color-dark) !important;
+          color: white !important;
+        }
+        .printable-area .border, .printable-area .border-b, .printable-area .border-l, .printable-area .border-r, .printable-area .divide-y > :not([hidden]) ~ :not([hidden]) {
+          border-color: #e2e8f0 !important; /* slate-200 */
+        }
+        .printable-area [class*="bg-blue-50"] {
+            background-color: transparent !important;
         }
         .printable-area .text-primary {
-          color: black !important;
+          color: var(--color-primary) !important;
         }
         .printable-area button, .printable-area .p-2 {
           border: none !important;
           background-color: transparent !important;
         }
-         .printable-area [style*="background-color"] {
-            border: 1px solid #ccc;
-            -webkit-print-color-adjust: exact;
-            color-adjust: exact;
+        .printable-area .sticky {
+          position: static !important;
         }
       }
     </style>

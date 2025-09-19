@@ -108,12 +108,6 @@ export const firestoreService = {
     const newBookingId = docRef.id;
 
     const initialDetails: BookingDetailsDocument = { meetingStatus: 'Scheduled' };
-    eventType.customFormFields.forEach(field => {
-        if (field.linkedRecordField && bookingData.customAnswers?.[field.id]) {
-            const value = bookingData.customAnswers[field.id];
-            (initialDetails as any)[field.linkedRecordField] = field.type === 'checkbox' ? value === 'true' : value;
-        }
-    });
     await setDoc(doc(db, 'bookingDetails', newBookingId), initialDetails);
 
     let newBooking: Booking = { ...bookingToCreate, id: newBookingId };

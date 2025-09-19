@@ -22,7 +22,6 @@ export interface FormField {
   type: 'text' | 'email' | 'textarea' | 'select' | 'radio' | 'checkbox';
   required: boolean;
   options?: string[]; // For select, radio
-  linkedRecordField?: keyof Omit<BookingDetails, 'id'>;
 }
 
 export interface EventType {
