@@ -44,7 +44,7 @@ const App: React.FC = () => {
                     <ReactRouterDOM.Route element={<Layout />}>
                         <ReactRouterDOM.Route path="/" element={<Dashboard />} />
                         <ReactRouterDOM.Route path="/analytics" element={<Analytics />} />
-                        <ReactRouterDOM.Route path="/records" element={<RecordsPage />} />
+                        <ReactRouterDOM.Route path="/data-explorer" element={<RecordsPage />} />
                     </ReactRouterDOM.Route>
                 </ReactRouterDOM.Route>
             </ReactRouterDOM.Routes>
@@ -64,7 +64,7 @@ const Header: React.FC<{onSignOut: () => void}> = ({ onSignOut }) => {
                     <nav className="flex items-center space-x-4">
                         <ReactRouterDOM.Link to="/" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Dashboard</ReactRouterDOM.Link>
                         <ReactRouterDOM.Link to="/analytics" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Analytics</ReactRouterDOM.Link>
-                        <ReactRouterDOM.Link to="/records" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Records</ReactRouterDOM.Link>
+                        <ReactRouterDOM.Link to="/data-explorer" className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Data Explorer</ReactRouterDOM.Link>
                         <div className="w-px h-6 bg-slate-200"></div>
                         <button onClick={onSignOut} className="text-sm font-medium text-gray-500 hover:text-primary transition-colors">Sign Out</button>
                     </nav>

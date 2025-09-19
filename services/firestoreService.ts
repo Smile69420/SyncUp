@@ -1,4 +1,4 @@
-import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, ColumnConfiguration, ColumnConfig } from '../types';
+import type { EventType, Booking, BookingDocument, BookingDetails, BookingDetailsDocument, ColumnConfiguration, ColumnConfig, MergedBooking } from '../types';
 import { addMinutes, format } from 'date-fns';
 import { db } from './firebaseService';
 import {
@@ -10,6 +10,9 @@ import {
     setDoc,
     updateDoc,
     deleteDoc,
+    query,
+    where,
+    writeBatch,
 } from 'firebase/firestore';
 import { config } from '../config';
 
@@ -105,6 +108,24 @@ export const firestoreService = {
   getBookings: async (): Promise<Booking[]> => {
     const bookingsCollection = collection(db, 'bookings');
     const querySnapshot = await getDocs(bookingsCollection);
+    return querySnapshot.docs.map(doc => {
+        const data = doc.data() as BookingDocument;
+        return {
+            id: doc.id,
+            ...data,
+            startTime: data.startTime.toDate(),
+            endTime: data.endTime.toDate(),
+        };
+    });
+  },
+
+  /**
+   * Fetches all bookings associated with a specific event type.
+   */
+  getBookingsForEventType: async (eventTypeId: string): Promise<Booking[]> => {
+    const bookingsCollection = collection(db, 'bookings');
+    const q = query(bookingsCollection, where("eventTypeId", "==", eventTypeId));
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
         const data = doc.data() as BookingDocument;
         return {
@@ -286,11 +307,28 @@ export const firestoreService = {
   },
 
   /**
-   * Deletes an event type from Firestore.
+   * Deletes an event type and all its associated bookings and booking details atomically.
    */
-  deleteEventType: async (eventTypeId: string): Promise<void> => {
-    const docRef = doc(db, 'eventTypes', eventTypeId);
-    await deleteDoc(docRef);
+  deleteEventTypeAndBookings: async (eventTypeId: string): Promise<void> => {
+    const batch = writeBatch(db);
+
+    // 1. Find all associated bookings
+    const associatedBookings = await firestoreService.getBookingsForEventType(eventTypeId);
+
+    // 2. Add delete operations for each booking and its details to the batch
+    associatedBookings.forEach(booking => {
+        const bookingRef = doc(db, 'bookings', booking.id);
+        const detailsRef = doc(db, 'bookingDetails', booking.id);
+        batch.delete(bookingRef);
+        batch.delete(detailsRef);
+    });
+
+    // 3. Add the delete operation for the event type itself
+    const eventTypeRef = doc(db, 'eventTypes', eventTypeId);
+    batch.delete(eventTypeRef);
+
+    // 4. Commit the batch
+    await batch.commit();
   },
 
   /**
@@ -303,7 +341,11 @@ export const firestoreService = {
     if (docSnap.exists()) {
         const data = docSnap.data();
         if (data && Array.isArray(data.config)) {
-             return data.config as ColumnConfiguration;
+             // Merge with predefined to add new columns if they don't exist
+             const savedConfig = data.config as ColumnConfiguration;
+             const savedKeys = new Set(savedConfig.map(c => c.key));
+             const newColumns = PREDEFINED_COLUMNS.filter(c => !savedKeys.has(c.key));
+             return [...savedConfig, ...newColumns];
         }
     }
     // If no config exists, return the default based on predefined fields.

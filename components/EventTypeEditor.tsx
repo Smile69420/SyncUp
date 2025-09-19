@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import type { EventType, Availability, FormField, DateUnavailability } from '../types';
+import type { EventType, Availability, FormField, DateUnavailability, Booking, MergedBooking } from '../types';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { format } from 'date-fns';
 import Select from './ui/Select';
 import { firestoreService } from '../services/firestoreService';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface EventTypeEditorProps {
     eventType: EventType | null;
@@ -191,6 +192,9 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
     const [bookingHorizonDays, setBookingHorizonDays] = useState(30);
     const [customFormFields, setCustomFormFields] = useState<FormField[]>([]);
     const [activeTab, setActiveTab] = useState<'details' | 'availability' | 'questions' | 'integrations'>('details');
+
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [bookingsToDelete, setBookingsToDelete] = useState<Booking[] | null>(null);
 
 
     useEffect(() => {
@@ -394,19 +398,26 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
         onSave(dataToSave);
     };
 
-    const handleDelete = async () => {
+    const handleDeleteClick = async () => {
+        if (!eventType || !eventType.id) return;
+        setBookingsToDelete(null); // Show loading state in modal
+        setIsDeleteModalOpen(true);
+        const associatedBookings = await firestoreService.getBookingsForEventType(eventType.id);
+        setBookingsToDelete(associatedBookings);
+    };
+    
+    const handleConfirmDelete = async () => {
         if (!eventType || !eventType.id || !onDelete) return;
-
-        if (window.confirm(`Are you sure you want to delete the "${eventType.name}" event type? This action cannot be undone, but existing bookings will be preserved.`)) {
-            try {
-                await firestoreService.deleteEventType(eventType.id);
-                onDelete(); // This will close the modal and refresh the dashboard
-            } catch (error) {
-                console.error("Failed to delete event type:", error);
-                alert("Could not delete the event type. Please try again.");
-            }
+        try {
+            await firestoreService.deleteEventTypeAndBookings(eventType.id);
+            setIsDeleteModalOpen(false);
+            onDelete();
+        } catch (error) {
+            console.error("Failed to delete event type and bookings:", error);
+            alert("Could not complete deletion. Please try again.");
         }
     };
+
 
     const TabButton = ({ tab, children }: { tab: typeof activeTab, children: React.ReactNode }) => (
          <button 
@@ -420,6 +431,7 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
     const inputClasses = "mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-slate-900";
 
     return (
+        <>
         <Modal title={eventType ? 'Edit Event Type' : 'Create Event Type'} onClose={onClose}>
             <div className="space-y-6">
                 <div className="border-b border-slate-200">
@@ -571,7 +583,7 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                                     <p className="text-sm text-slate-600 mt-1 mb-4">
                                         Deleting this event type cannot be undone. All existing bookings for this event type will be preserved, but you will no longer be able to accept new bookings for it.
                                     </p>
-                                    <Button variant="outline" onClick={handleDelete} className="!border-red-500 !text-red-600 hover:!bg-red-50">
+                                    <Button variant="outline" onClick={handleDeleteClick} className="!border-red-500 !text-red-600 hover:!bg-red-50">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                                         Delete this event type
                                     </Button>
@@ -771,6 +783,15 @@ const EventTypeEditor: React.FC<EventTypeEditorProps> = ({ eventType, onClose, o
                 </div>
             </div>
         </Modal>
+        {isDeleteModalOpen && eventType && (
+            <DeleteConfirmationModal
+                eventType={eventType}
+                associatedBookings={bookingsToDelete}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirmDelete={handleConfirmDelete}
+            />
+        )}
+        </>
     );
 };
 
