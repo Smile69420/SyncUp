@@ -6,6 +6,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import BookingDetailsEditorModal from './BookingDetailsEditorModal';
 import DeleteBookingConfirmationModal from './DeleteBookingConfirmationModal';
+import DeleteMultipleBookingsModal from './DeleteMultipleBookingsModal';
 import { format, isValid, isWithinInterval, subDays, getWeek, getMonth, getDay } from 'date-fns';
 
 // --- Static Column Configuration ---
@@ -85,6 +86,10 @@ const DataExplorerPage: React.FC = () => {
     const [selectedBooking, setSelectedBooking] = useState<MergedBooking | null>(null);
     const [bookingToDelete, setBookingToDelete] = useState<MergedBooking | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Multi-select state
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [isMultiDeleteModalOpen, setIsMultiDeleteModalOpen] = useState(false);
 
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
@@ -223,6 +228,43 @@ const DataExplorerPage: React.FC = () => {
         }
     };
     
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedIds(filteredData.map(item => item.id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const handleSelectOne = (id: string) => {
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const handleConfirmMultiDelete = async () => {
+        setIsDeleting(true);
+        try {
+            // Create a map of booking ID to event type ID for the Apps Script payload
+            const bookingToEventTypeMap = mergedData.reduce((acc, booking) => {
+                if (selectedIds.includes(booking.id)) {
+                    acc[booking.id] = booking.eventTypeId;
+                }
+                return acc;
+            }, {} as { [bookingId: string]: string });
+
+            await firestoreService.deleteMultipleBookings(selectedIds, bookingToEventTypeMap);
+            setSelectedIds([]);
+            setIsMultiDeleteModalOpen(false);
+            await fetchData();
+        } catch (error) {
+            console.error("Failed to delete multiple bookings:", error);
+            alert("Could not delete all selected bookings. Please try again.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+    
     const getDisplayValue = (item: MergedBooking, key: string): string => {
         try {
             const dateValid = item.startTime && isValid(item.startTime);
@@ -308,6 +350,15 @@ const DataExplorerPage: React.FC = () => {
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
+                                    <th scope="col" className="px-4 py-3">
+                                        <input 
+                                            type="checkbox"
+                                            className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"
+                                            checked={selectedIds.length > 0 && selectedIds.length === filteredData.length}
+                                            onChange={handleSelectAll}
+                                            aria-label="Select all bookings"
+                                        />
+                                    </th>
                                     <th scope="col" className="sticky left-0 bg-slate-50 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider z-10">Actions</th>
                                     {visibleColumns.map(col => (
                                         <th key={col.key as string} scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{col.label}</th>
@@ -316,7 +367,16 @@ const DataExplorerPage: React.FC = () => {
                             </thead>
                             <tbody className="bg-white divide-y divide-slate-200">
                                 {filteredData.map(item => (
-                                    <tr key={item.id} className="hover:bg-slate-50">
+                                    <tr key={item.id} className={`hover:bg-slate-50 ${selectedIds.includes(item.id) ? 'bg-primary/5' : ''}`}>
+                                        <td className="px-4 py-4">
+                                             <input 
+                                                type="checkbox"
+                                                className="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"
+                                                checked={selectedIds.includes(item.id)}
+                                                onChange={() => handleSelectOne(item.id)}
+                                                aria-label={`Select booking for ${item.bookerName}`}
+                                            />
+                                        </td>
                                         <td className="sticky left-0 bg-white hover:bg-slate-50 px-6 py-4 whitespace-nowrap text-sm font-medium z-10 border-r">
                                             <div className="flex items-center gap-2">
                                                 <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>View</Button>
@@ -364,6 +424,31 @@ const DataExplorerPage: React.FC = () => {
                     onConfirm={handleConfirmDelete}
                     isDeleting={isDeleting}
                 />
+            )}
+            
+            {isMultiDeleteModalOpen && (
+                <DeleteMultipleBookingsModal
+                    count={selectedIds.length}
+                    onClose={() => setIsMultiDeleteModalOpen(false)}
+                    onConfirm={handleConfirmMultiDelete}
+                    isDeleting={isDeleting}
+                />
+            )}
+            
+            {/* Contextual Action Bar */}
+            {selectedIds.length > 0 && (
+                <div className="fixed bottom-6 right-6 z-50 bg-white rounded-lg shadow-2xl p-4 flex items-center gap-4 animate-fade-in-up border">
+                    <span className="text-sm font-medium text-slate-700">{selectedIds.length} selected</span>
+                    <Button 
+                        size="sm"
+                        onClick={() => setIsMultiDeleteModalOpen(true)}
+                        className="!bg-red-600 hover:!bg-red-700 focus:ring-red-500"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        Delete Selected
+                    </Button>
+                    <button onClick={() => setSelectedIds([])} className="text-sm text-slate-500 hover:text-slate-800">Cancel</button>
+                </div>
             )}
         </div>
     );

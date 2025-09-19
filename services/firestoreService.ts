@@ -289,6 +289,89 @@ export const firestoreService = {
     }
   },
 
+  deleteMultipleBookings: async (bookingIds: string[], bookingToEventTypeMap: { [bookingId: string]: string }): Promise<void> => {
+    const batch = writeBatch(db);
+    bookingIds.forEach(id => {
+        batch.delete(doc(db, 'bookings', id));
+        batch.delete(doc(db, 'bookingDetails', id));
+    });
+    await batch.commit();
+
+    const appsScriptUrl = config.appsScriptUrl;
+    if (!appsScriptUrl) return;
+
+    try {
+        const allEventTypes = await firestoreService.getEventTypes();
+        const eventTypeMap = new Map(allEventTypes.map(et => [et.id, et]));
+
+        const payload = {
+            action: 'deleteMultipleBookings',
+            bookings: bookingIds.map(id => {
+                const eventTypeId = bookingToEventTypeMap[id];
+                const eventType = eventTypeMap.get(eventTypeId);
+                return {
+                    bookingId: id,
+                    sheetId: eventType?.googleSheetConfig?.sheetId,
+                    sheetName: eventType?.googleSheetConfig?.sheetName,
+                };
+            }),
+        };
+        
+        const response = await fetch(appsScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Apps Script error on multi-delete: ${response.statusText} - ${errorText}`);
+        }
+    } catch (error) {
+        console.error("[APPS SCRIPT] Failed to send multi-delete request:", error);
+    }
+},
+
+  rescheduleBooking: async (bookingId: string, eventTypeId: string, newStartTime: Date): Promise<void> => {
+    const eventType = await firestoreService.getEventTypeById(eventTypeId);
+    if (!eventType) throw new Error("Event type not found for rescheduling.");
+
+    const newEndTime = addMinutes(newStartTime, eventType.duration);
+
+    const bookingRef = doc(db, 'bookings', bookingId);
+    await updateDoc(bookingRef, {
+        startTime: newStartTime,
+        endTime: newEndTime
+    });
+    
+    const appsScriptUrl = config.appsScriptUrl;
+    if (!appsScriptUrl) return;
+
+    try {
+        const payload = {
+            action: 'rescheduleBooking',
+            bookingId,
+            newStartTime: newStartTime.toISOString(),
+            newEndTime: newEndTime.toISOString(),
+            sheetId: eventType.googleSheetConfig?.sheetId,
+            sheetName: eventType.googleSheetConfig?.sheetName,
+        };
+
+        const response = await fetch(appsScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Apps Script reschedule error: ${response.statusText} - ${errorText}`);
+        }
+    } catch (error) {
+        console.error("[APPS SCRIPT] Failed to send reschedule request:", error);
+    }
+},
+
   /**
    * Deletes an event type and all its associated bookings and booking details atomically.
    */

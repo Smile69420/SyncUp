@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useMemo } from 'react';
 import type { Booking, EventType } from '../types';
 import Modal from './ui/Modal';
@@ -11,9 +8,10 @@ interface BookingPreviewModalProps {
     booking: Booking | null;
     eventType: EventType | undefined;
     onClose: () => void;
+    onInitiateReschedule: () => void;
 }
 
-const BookingPreviewModal: React.FC<BookingPreviewModalProps> = ({ booking, eventType, onClose }) => {
+const BookingPreviewModal: React.FC<BookingPreviewModalProps> = ({ booking, eventType, onClose, onInitiateReschedule }) => {
     const [isCopied, setIsCopied] = useState(false);
 
     const { reminderMessage, startTime, endTime } = useMemo(() => {
@@ -160,6 +158,10 @@ Team MCCIA`;
                             {isCopied ? 'Copied!' : 'Copy Message'}
                         </Button>
                     </div>
+                </div>
+                <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                    <Button variant="outline" onClick={onClose}>Close</Button>
+                    <Button onClick={onInitiateReschedule}>Reschedule</Button>
                 </div>
             </div>
         </Modal>

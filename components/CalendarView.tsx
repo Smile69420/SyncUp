@@ -1,17 +1,16 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import type { Booking, EventType, MergedBooking } from '../types';
+import type { Booking, EventType, MergedBooking, CalendarViewProps } from '../types';
 import {
     format, startOfWeek, endOfWeek, addDays, subDays, eachDayOfInterval, isSameDay, startOfDay, addHours,
     startOfMonth, endOfMonth, isSameMonth, isToday, addMonths, subMonths, addWeeks, subWeeks, getDay,
     getHours, getMinutes, isPast
 } from 'date-fns';
 import Button from './ui/Button';
-import BookingPreviewModal from './BookingPreviewModal';
 
-interface CalendarViewProps {
-    bookings: MergedBooking[];
-    eventTypes: EventType[];
+interface CalendarViewPropsInternal extends CalendarViewProps {
+    // No internal props needed for now
 }
+
 
 type ViewType = 'month' | 'week' | 'day';
 
@@ -59,10 +58,9 @@ const CurrentTimeIndicator: React.FC = () => {
 };
 
 
-const CalendarView: React.FC<CalendarViewProps> = ({ bookings, eventTypes }) => {
+const CalendarView: React.FC<CalendarViewPropsInternal> = ({ bookings, eventTypes, onEventClick }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [view, setView] = useState<ViewType>('week');
-    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
     const eventTypeMap = useMemo(() =>
         eventTypes.reduce((acc, et) => {
@@ -84,10 +82,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, eventTypes }) => 
 
     const handleToday = () => {
         setCurrentDate(new Date());
-    };
-    
-    const handleEventClick = (booking: Booking) => {
-        setSelectedBooking(booking);
     };
     
     const handlePrint = () => {
@@ -148,15 +142,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, eventTypes }) => 
         <div className="flex flex-col h-full printable-area">
             <Header />
             <div className="flex-grow overflow-auto custom-scrollbar">
-                {view === 'week' && <WeekViewComponent currentDate={currentDate} bookings={bookings} onEventClick={handleEventClick} eventTypeMap={eventTypeMap} />}
-                {view === 'month' && <MonthViewComponent currentDate={currentDate} bookings={bookings} onEventClick={handleEventClick} eventTypeMap={eventTypeMap} />}
-                {view === 'day' && <DayViewComponent currentDate={currentDate} bookings={bookings} onEventClick={handleEventClick} eventTypeMap={eventTypeMap} />}
+                {view === 'week' && <WeekViewComponent currentDate={currentDate} bookings={bookings} onEventClick={onEventClick} eventTypeMap={eventTypeMap} />}
+                {view === 'month' && <MonthViewComponent currentDate={currentDate} bookings={bookings} onEventClick={onEventClick} eventTypeMap={eventTypeMap} />}
+                {view === 'day' && <DayViewComponent currentDate={currentDate} bookings={bookings} onEventClick={onEventClick} eventTypeMap={eventTypeMap} />}
             </div>
-            <BookingPreviewModal
-                booking={selectedBooking}
-                eventType={selectedBooking ? eventTypeMap[selectedBooking.eventTypeId] : undefined}
-                onClose={() => setSelectedBooking(null)}
-            />
         </div>
     );
 };

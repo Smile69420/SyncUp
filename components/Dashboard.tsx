@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Changed to namespace import to fix module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
@@ -14,6 +10,8 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import { format, isToday, isWithinInterval, addDays, startOfToday, subDays, isPast } from 'date-fns';
 import BookingDetailsEditorModal from './BookingDetailsEditorModal';
+import BookingPreviewModal from './BookingPreviewModal';
+import RescheduleModal from './RescheduleModal';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode }> = ({ title, value, icon }) => (
     <Card className="flex items-center p-4">
@@ -36,6 +34,10 @@ const Dashboard: React.FC = () => {
     const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
     const [selectedBooking, setSelectedBooking] = useState<MergedBooking | null>(null);
     const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
+    // State for booking modals
+    const [bookingToPreview, setBookingToPreview] = useState<MergedBooking | null>(null);
+    const [bookingToReschedule, setBookingToReschedule] = useState<MergedBooking | null>(null);
 
 
     const fetchData = async () => {
@@ -166,6 +168,25 @@ const Dashboard: React.FC = () => {
             alert("Could not save changes. Please try again.");
         }
     };
+    
+    const handleInitiateReschedule = () => {
+        if (bookingToPreview) {
+            setBookingToReschedule(bookingToPreview);
+            setBookingToPreview(null);
+        }
+    };
+    
+    const handleConfirmReschedule = async (newStartTime: Date) => {
+        if (!bookingToReschedule) return;
+        try {
+            await firestoreService.rescheduleBooking(bookingToReschedule.id, bookingToReschedule.eventTypeId, newStartTime);
+            setBookingToReschedule(null);
+            await fetchData();
+        } catch (error) {
+            console.error("Failed to reschedule booking:", error);
+            alert("Could not reschedule the booking. Please try again.");
+        }
+    };
 
 
     if (loading) {
@@ -251,7 +272,11 @@ const Dashboard: React.FC = () => {
             <section>
                 <h2 className="text-2xl font-semibold mb-4">Your Schedule</h2>
                 <Card>
-                    <CalendarView bookings={mergedData} eventTypes={eventTypes} />
+                    <CalendarView 
+                        bookings={mergedData} 
+                        eventTypes={eventTypes} 
+                        onEventClick={(booking) => setBookingToPreview(booking)}
+                    />
                 </Card>
             </section>
 
@@ -271,6 +296,26 @@ const Dashboard: React.FC = () => {
                     onSave={handleSaveDetails}
                 />
             )}
+            
+            {bookingToPreview && (
+                 <BookingPreviewModal
+                    booking={bookingToPreview}
+                    eventType={eventTypes.find(et => et.id === bookingToPreview.eventTypeId)}
+                    onClose={() => setBookingToPreview(null)}
+                    onInitiateReschedule={handleInitiateReschedule}
+                />
+            )}
+
+            {bookingToReschedule && (
+                <RescheduleModal
+                    booking={bookingToReschedule}
+                    eventType={eventTypes.find(et => et.id === bookingToReschedule.eventTypeId)!}
+                    allBookings={bookings}
+                    onClose={() => setBookingToReschedule(null)}
+                    onSave={handleConfirmReschedule}
+                />
+            )}
+
         </div>
     );
 };

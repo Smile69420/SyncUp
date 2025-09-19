@@ -45,6 +45,41 @@ function doPost(e) {
             .createTextOutput(JSON.stringify({ status: 'success', message: 'Deletion processed.' }))
             .setMimeType(ContentService.MimeType.JSON);
 
+    } else if (data.action === 'deleteMultipleBookings') {
+        const { bookings } = data;
+        if (!bookings || !Array.isArray(bookings)) {
+            throw new Error("Missing 'bookings' array for deleteMultipleBookings action.");
+        }
+
+        console.log(`Received request to delete ${bookings.length} bookings.`);
+        bookings.forEach(function(b) {
+            deleteCalendarEvent(b.bookingId);
+            if (b.sheetId && b.sheetName) {
+                deleteRowFromSheet(b.bookingId, b.sheetId, b.sheetName);
+            }
+        });
+
+        return ContentService
+            .createTextOutput(JSON.stringify({ status: 'success', message: 'Multi-deletion processed.' }))
+            .setMimeType(ContentService.MimeType.JSON);
+    
+    } else if (data.action === 'rescheduleBooking') {
+        const { bookingId, newStartTime, newEndTime, sheetId, sheetName } = data;
+        if (!bookingId || !newStartTime || !newEndTime) {
+            throw new Error("Missing parameters for rescheduleBooking action.");
+        }
+
+        console.log(`Received reschedule request for booking ${bookingId}`);
+        updateCalendarEventTime(bookingId, newStartTime, newEndTime);
+
+        if (sheetId && sheetName) {
+            updateSheetRowTime(bookingId, newStartTime, newEndTime, sheetId, sheetName);
+        }
+
+        return ContentService
+            .createTextOutput(JSON.stringify({ status: 'success', message: 'Reschedule processed.' }))
+            .setMimeType(ContentService.MimeType.JSON);
+
     } else {
       // --- Handle New Booking Creation (Default) ---
       const { eventType, bookingData } = data;
@@ -391,6 +426,80 @@ function deleteRowFromSheet(bookingId, sheetId, sheetName) {
     console.log(`Booking ID ${bookingId} not found in sheet for deletion.`);
   } catch(err) {
     console.error(`Error deleting row from sheet for booking ${bookingId}: ${err.toString()}`);
+  }
+}
+
+/**
+ * Finds and updates the time of a Google Calendar event.
+ * @param {string} bookingId - The booking ID stored in the event's extended properties.
+ * @param {string} newStartTimeISO - The new start time in ISO format.
+ * @param {string} newEndTimeISO - The new end time in ISO format.
+ */
+function updateCalendarEventTime(bookingId, newStartTimeISO, newEndTimeISO) {
+  try {
+    const events = Calendar.Events.list('primary', {
+      privateExtendedProperty: `syncUpBookingId=${bookingId}`,
+      showDeleted: false
+    }).items;
+
+    if (events && events.length > 0) {
+      const event = events[0];
+      const patch = {
+        start: { dateTime: newStartTimeISO },
+        end: { dateTime: newEndTimeISO }
+      };
+      Calendar.Events.patch(patch, 'primary', event.id, { sendNotifications: true });
+      console.log(`Rescheduled calendar event ${event.id} for booking ID ${bookingId}.`);
+    } else {
+      console.log(`No calendar event found to reschedule for booking ID: ${bookingId}`);
+    }
+  } catch (err) {
+    console.error(`Error rescheduling calendar event for booking ${bookingId}: ${err.toString()}`);
+  }
+}
+
+/**
+ * Finds a booking row in a sheet and updates its date and time columns.
+ * @param {string} bookingId The unique ID of the booking to find.
+ * @param {string} newStartTimeISO The new start time in ISO format.
+ * @param {string} newEndTimeISO The new end time in ISO format.
+ * @param {string} sheetId The ID of the Google Spreadsheet.
+ * @param {string} sheetName The name of the sheet (tab).
+ */
+function updateSheetRowTime(bookingId, newStartTimeISO, newEndTimeISO, sheetId, sheetName) {
+  try {
+    const sheet = SpreadsheetApp.openById(sheetId).getSheetByName(sheetName);
+    if (!sheet) return;
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 1) return;
+
+    const headers = data[0];
+    const bookingIdCol = headers.indexOf('Booking ID');
+    const dateCol = headers.indexOf('Date');
+    const startTimeCol = headers.indexOf('Start Time');
+    const endTimeCol = headers.indexOf('End Time');
+
+    if (bookingIdCol === -1 || dateCol === -1 || startTimeCol === -1 || endTimeCol === -1) {
+      console.log("Missing one of the required columns (Booking ID, Date, Start Time, End Time) for rescheduling.");
+      return;
+    }
+
+    const newStartTime = new Date(newStartTimeISO);
+    const newEndTime = new Date(newEndTimeISO);
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][bookingIdCol] == bookingId) {
+        const rowToUpdate = i + 1;
+        sheet.getRange(rowToUpdate, dateCol + 1).setValue(newStartTime).setNumberFormat('yyyy-mm-dd');
+        sheet.getRange(rowToUpdate, startTimeCol + 1).setValue(newStartTime).setNumberFormat('hh:mm am/pm');
+        sheet.getRange(rowToUpdate, endTimeCol + 1).setValue(newEndTime).setNumberFormat('hh:mm am/pm');
+        console.log(`Updated sheet row ${rowToUpdate} for rescheduled booking ID ${bookingId}.`);
+        return;
+      }
+    }
+  } catch (err) {
+    console.error(`Error updating sheet for rescheduled booking ${bookingId}: ${err.toString()}`);
   }
 }
 

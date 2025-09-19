@@ -135,3 +135,10 @@ export interface ColumnConfig {
 }
 
 export type ColumnConfiguration = ColumnConfig[];
+
+export interface CalendarViewProps {
+    bookings: MergedBooking[];
+    eventTypes: EventType[];
+    onEventClick: (booking: MergedBooking) => void;
+    onInitiateReschedule?: (booking: MergedBooking) => void;
+}
